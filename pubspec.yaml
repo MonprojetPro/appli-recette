@@ -36,7 +36,7 @@ dev_dependencies:
   bloc_lint: ^0.3.7
   bloc_test: ^10.0.0
   bloc_tools: ^0.1.0-dev.22
-  build_runner: ^2.4.14
+  build_runner: ^2.12.1
   drift_dev: ^2.23.1
   flutter_test:
     sdk: flutter
