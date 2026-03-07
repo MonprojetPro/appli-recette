@@ -4,6 +4,7 @@ import 'package:appli_recette/features/onboarding/presentation/providers/onboard
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Provider du notifier utilisé par GoRouter pour ré-évaluer les redirects.
@@ -34,6 +35,7 @@ class AppRouterNotifier extends ChangeNotifier {
   }
 
   final Ref _ref;
+  bool _autoJoinInProgress = false;
 
   /// Préfixes de routes publiques (accessibles sans authentification).
   static const _publicPrefixes = [
@@ -41,6 +43,7 @@ class AppRouterNotifier extends ChangeNotifier {
     '/signup',
     '/forgot-password',
     '/verify-email',
+    '/join',
   ];
 
   /// Logique de redirection pour GoRouter.
@@ -87,9 +90,44 @@ class AppRouterNotifier extends ChangeNotifier {
     }
 
     // Routes protégées : vérifier foyer configuré
-    if (householdAsync.value == null) return '/household-setup';
+    if (householdAsync.value == null) {
+      // Vérifier s'il y a un code d'invitation pending (deep-link /join)
+      if (!_autoJoinInProgress) {
+        _autoJoinInProgress = true;
+        _tryAutoJoin();
+      }
+      return '/household-setup';
+    }
 
     return null;
+  }
+
+  /// Tente un auto-join si un pending_join_code est stocké.
+  ///
+  /// Lancé en fire-and-forget : si le code est valide, les providers
+  /// sont invalidés et le router se réévalue automatiquement vers '/'.
+  Future<void> _tryAutoJoin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final code = prefs.getString('pending_join_code');
+      if (code == null || code.isEmpty) return;
+
+      // Consommer le code immédiatement (éviter boucle)
+      await prefs.remove('pending_join_code');
+
+      final service = _ref.read(householdServiceProvider);
+      await service.joinHousehold(code);
+
+      // Marquer l'onboarding comme complété
+      await _ref.read(onboardingNotifierProvider.notifier).complete();
+
+      // Invalider le provider → le router se réévalue
+      _ref.invalidate(currentHouseholdIdProvider);
+    } catch (_) {
+      // Echec silencieux — l'utilisateur reste sur /household-setup
+    } finally {
+      _autoJoinInProgress = false;
+    }
   }
 
   /// Détermine la route par défaut pour un utilisateur authentifié.

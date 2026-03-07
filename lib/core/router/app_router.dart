@@ -18,6 +18,7 @@ import 'package:appli_recette/features/generation/presentation/providers/generat
 import 'package:appli_recette/features/planning/data/utils/week_utils.dart';
 import 'package:appli_recette/features/planning/presentation/providers/planning_provider.dart';
 import 'package:appli_recette/features/recipes/presentation/providers/recipes_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -100,14 +101,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // ─── Deep-link invitation (Story 8.3) ────────────────────────────────
+      // Sauvegarde le code en local puis redirige vers /signup.
+      // Après login, le router détectera le code pending et auto-join.
       GoRoute(
         path: AppRoutes.join,
-        redirect: (context, state) {
+        redirect: (context, state) async {
           final code = state.uri.queryParameters['code'];
           if (code != null && code.isNotEmpty) {
-            return '${AppRoutes.householdSetup}?code=$code';
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('pending_join_code', code);
           }
-          return AppRoutes.householdSetup;
+          return AppRoutes.signup;
         },
       ),
 
