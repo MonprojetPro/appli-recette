@@ -62,6 +62,11 @@ class AppRouterNotifier extends ChangeNotifier {
       return isPublic ? null : '/login';
     }
 
+    // Authentifié : attendre que les providers async soient résolus
+    final householdAsync = _ref.read(currentHouseholdIdProvider);
+    final onboardingAsync = _ref.read(onboardingNotifierProvider);
+    if (householdAsync.isLoading || onboardingAsync.isLoading) return null;
+
     // Authentifié sur une route publique → rediriger vers l'app
     if (isPublic) {
       return _resolveAuthenticatedRoute();
@@ -69,8 +74,6 @@ class AppRouterNotifier extends ChangeNotifier {
 
     // Route /household-setup : vérifier si vraiment nécessaire
     if (loc == '/household-setup') {
-      final householdAsync = _ref.read(currentHouseholdIdProvider);
-      if (householdAsync.isLoading) return null;
       if (householdAsync.value != null) {
         return _resolveAuthenticatedRoute();
       }
@@ -79,28 +82,27 @@ class AppRouterNotifier extends ChangeNotifier {
 
     // Route /onboarding : vérifier si déjà complété
     if (loc == '/onboarding') {
-      final onboardingAsync = _ref.read(onboardingNotifierProvider);
-      if (onboardingAsync.isLoading) return null;
       if (onboardingAsync.value == true) return '/';
       return null;
     }
 
     // Routes protégées : vérifier foyer configuré
-    final householdAsync = _ref.read(currentHouseholdIdProvider);
-    if (householdAsync.isLoading) return null;
     if (householdAsync.value == null) return '/household-setup';
 
     return null;
   }
 
   /// Détermine la route par défaut pour un utilisateur authentifié.
-  String _resolveAuthenticatedRoute() {
+  ///
+  /// Retourne `null` tant que les providers async ne sont pas résolus,
+  /// ce qui évite un flicker vers la home avant la vraie destination.
+  String? _resolveAuthenticatedRoute() {
     final householdAsync = _ref.read(currentHouseholdIdProvider);
-    if (householdAsync.isLoading) return '/';
+    if (householdAsync.isLoading) return null;
     if (householdAsync.value == null) return '/household-setup';
 
     final onboardingAsync = _ref.read(onboardingNotifierProvider);
-    if (onboardingAsync.isLoading) return '/';
+    if (onboardingAsync.isLoading) return null;
     if (!(onboardingAsync.value ?? false)) return '/onboarding';
 
     return '/';

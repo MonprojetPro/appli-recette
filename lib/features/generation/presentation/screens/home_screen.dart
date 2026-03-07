@@ -1,7 +1,11 @@
+import 'package:appli_recette/core/auth/auth_providers.dart';
 import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
+import 'package:appli_recette/core/household/household_providers.dart';
+import 'package:appli_recette/core/household/invitation_service.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/core/widgets/sync_status_badge.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:appli_recette/features/generation/presentation/providers/generation_provider.dart';
 import 'package:appli_recette/features/generation/presentation/providers/menu_provider.dart';
 import 'package:appli_recette/features/generation/presentation/widgets/generation_filters_sheet.dart';
@@ -70,6 +74,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           height: 32,
         ),
         actions: [
+          // Partager le code foyer
+          Builder(
+            builder: (context) {
+              final code = ref.watch(householdCodeProvider).value;
+              if (code == null) return const SizedBox.shrink();
+              return IconButton(
+                icon: const Icon(Icons.share_outlined),
+                tooltip: 'Inviter au foyer',
+                onPressed: () => ref
+                    .read(invitationServiceProvider)
+                    .shareInvitation(code),
+              );
+            },
+          ),
+
           const SyncStatusBadge(),
 
           // Filtres de génération
@@ -97,7 +116,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
 
-          // Générer/Regénérer déplacé dans le FAB contextuel (AppShell)
+          // Déconnexion
+          IconButton(
+            icon: const Icon(Icons.logout_outlined),
+            tooltip: 'Se déconnecter',
+            onPressed: () => _confirmSignOut(context),
+          ),
         ],
       ),
       body: Column(
@@ -493,6 +517,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             .replaceSlot(slotIndex, recipeId),
       ),
     );
+  }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Se déconnecter ?'),
+        content: const Text(
+          'Vous serez redirigé vers l\'écran de connexion. '
+          'Vos données locales seront conservées.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Se déconnecter'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final authService = ref.read(authServiceProvider);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('household_id');
+    ref.invalidate(currentHouseholdIdProvider);
+    await authService.signOut();
+
+    if (mounted) context.go('/login');
   }
 
   String _formatWeekTitle(DateTime monday, DateTime sunday) {

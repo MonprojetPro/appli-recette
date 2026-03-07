@@ -12,7 +12,7 @@ class AppConfig {
 
   static const String webBaseUrl = String.fromEnvironment(
     'WEB_BASE_URL',
-    defaultValue: 'https://appli-recette.vercel.app',
+    defaultValue: 'https://menuzen.vercel.app',
   );
 
   bool get isDevelopment => flavor == AppFlavor.development;

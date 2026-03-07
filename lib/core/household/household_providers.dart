@@ -2,6 +2,7 @@ import 'package:appli_recette/core/auth/auth_state_provider.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
 import 'package:appli_recette/core/household/household_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Provider du service de gestion du foyer.
 final householdServiceProvider = Provider<HouseholdService>((ref) {
@@ -21,6 +22,20 @@ final currentHouseholdIdProvider = FutureProvider<String?>((ref) async {
   ref.watch(authStateProvider);
   final service = ref.watch(householdServiceProvider);
   return service.getCurrentHouseholdId();
+});
+
+/// Provider du code d'invitation du foyer courant (depuis Supabase).
+final householdCodeProvider = FutureProvider<String?>((ref) async {
+  final householdId = ref.watch(currentHouseholdIdProvider).value;
+  if (householdId == null) return null;
+
+  final response = await Supabase.instance.client
+      .from('households')
+      .select('code')
+      .eq('id', householdId)
+      .single();
+
+  return response['code'] as String?;
 });
 
 /// Provider indiquant si un foyer est configuré.

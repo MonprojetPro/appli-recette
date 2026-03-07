@@ -1,9 +1,12 @@
 import 'package:appli_recette/core/database/app_database.dart';
+import 'package:appli_recette/core/household/household_providers.dart';
+import 'package:appli_recette/core/household/invitation_service.dart';
 import 'package:appli_recette/core/router/app_router.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/features/household/presentation/providers/household_provider.dart';
 import 'package:appli_recette/features/household/presentation/widgets/member_card.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -13,6 +16,7 @@ class HouseholdPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final membersAsync = ref.watch(membersStreamProvider);
+    final codeAsync = ref.watch(householdCodeProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -27,9 +31,27 @@ class HouseholdPage extends ConsumerWidget {
               onPressed: () => context.push(AppRoutes.memberAdd),
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Réglages',
+            onPressed: () => context.push(AppRoutes.settings),
+          ),
         ],
       ),
-      body: membersAsync.when(
+      body: Column(
+        children: [
+          // ── Code foyer ──
+          if (codeAsync.value != null)
+            _HouseholdCodeBanner(
+              code: codeAsync.value!,
+              onShare: () => ref
+                  .read(invitationServiceProvider)
+                  .shareInvitation(codeAsync.value!),
+            ),
+
+          // ── Liste des membres ──
+          Expanded(
+            child: membersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(
           child: Column(
@@ -67,6 +89,9 @@ class HouseholdPage extends ConsumerWidget {
             },
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }
@@ -163,6 +188,71 @@ class _EmptyState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bandeau affichant le code d'invitation du foyer.
+class _HouseholdCodeBanner extends StatelessWidget {
+  const _HouseholdCodeBanner({
+    required this.code,
+    required this.onShare,
+  });
+
+  final String code;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: const Color(0xFFFFF3E0),
+      child: Row(
+        children: [
+          const Icon(Icons.vpn_key_outlined, size: 18, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Text(
+            'Code foyer : ',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            code,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+              color: AppColors.primary,
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.copy, size: 18),
+            tooltip: 'Copier le code',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: code));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Code copie !'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.share, size: 18),
+            tooltip: 'Partager',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: onShare,
+          ),
+        ],
       ),
     );
   }

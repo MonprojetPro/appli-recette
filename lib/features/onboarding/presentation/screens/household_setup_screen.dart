@@ -1,6 +1,7 @@
 import 'package:appli_recette/core/household/household_providers.dart';
 import 'package:appli_recette/core/household/household_service.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
+import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -87,6 +88,9 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
       final service = ref.read(householdServiceProvider);
       await service.joinHousehold(_codeValue);
       if (mounted) {
+        // Marquer l'onboarding comme complété — le créateur du foyer
+        // a déjà configuré les membres et préférences.
+        await ref.read(onboardingNotifierProvider.notifier).complete();
         ref.invalidate(currentHouseholdIdProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Foyer rejoint avec succès')),
