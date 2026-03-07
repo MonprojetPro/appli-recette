@@ -22,12 +22,21 @@ class AuthService {
   /// Crée un nouveau compte utilisateur.
   ///
   /// [AuthResponse.session] est null si la confirmation email est requise.
+  /// [emailRedirectTo] redirige vers /login après confirmation email
+  /// pour éviter un flash sur la home avec un token temporaire.
   Future<AuthResponse> signUp(String email, String password) {
     return _client.auth.signUp(
       email: email,
       password: password,
+      emailRedirectTo: '${_webBaseUrl}/login',
     );
   }
+
+  /// URL de base web, injectée via dart-define ou défaut menuzen.
+  static const _webBaseUrl = String.fromEnvironment(
+    'WEB_BASE_URL',
+    defaultValue: 'https://menuzen.vercel.app',
+  );
 
   /// Envoie un email de réinitialisation du mot de passe.
   Future<void> resetPassword(String email) {
