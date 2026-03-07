@@ -1,19 +1,14 @@
-import 'dart:io';
-
+import 'package:appli_recette/core/database/database_connection.dart';
+import 'package:appli_recette/core/database/tables/ingredients_table.dart';
+import 'package:appli_recette/core/database/tables/meal_ratings_table.dart';
+import 'package:appli_recette/core/database/tables/members_table.dart';
+import 'package:appli_recette/core/database/tables/menu_slots_table.dart';
+import 'package:appli_recette/core/database/tables/presence_schedules_table.dart';
+import 'package:appli_recette/core/database/tables/recipe_steps_table.dart';
+import 'package:appli_recette/core/database/tables/recipes_table.dart';
+import 'package:appli_recette/core/database/tables/sync_queue_table.dart';
+import 'package:appli_recette/core/database/tables/weekly_menus_table.dart';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-
-import 'tables/ingredients_table.dart';
-import 'tables/meal_ratings_table.dart';
-import 'tables/members_table.dart';
-import 'tables/menu_slots_table.dart';
-import 'tables/presence_schedules_table.dart';
-import 'tables/recipes_table.dart';
-import 'tables/recipe_steps_table.dart';
-import 'tables/sync_queue_table.dart';
-import 'tables/weekly_menus_table.dart';
 
 part 'app_database.g.dart';
 
@@ -31,7 +26,7 @@ part 'app_database.g.dart';
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase() : super(openConnection());
 
   AppDatabase.forTesting(super.e);
 
@@ -62,12 +57,4 @@ class AppDatabase extends _$AppDatabase {
       },
     );
   }
-}
-
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'appli_recette.sqlite'));
-    return NativeDatabase.createInBackground(file);
-  });
 }

@@ -1,3 +1,4 @@
+import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
 import 'package:appli_recette/features/generation/presentation/screens/home_screen.dart';
@@ -35,25 +36,29 @@ void main() {
       expect(container.read(canGenerateProvider), isFalse);
     });
 
-    test('est false quand 2 recettes', () {
+    test('est false quand 13 recettes', () {
       final container = ProviderContainer(
-        overrides: [recipeCountProvider.overrideWith((ref) => 2)],
+        overrides: [recipeCountProvider.overrideWith((ref) => 13)],
       );
       addTearDown(container.dispose);
       expect(container.read(canGenerateProvider), isFalse);
     });
 
-    test('est true quand exactement 3 recettes', () {
+    test('est true quand exactement $kMinRecipesForGeneration recettes', () {
       final container = ProviderContainer(
-        overrides: [recipeCountProvider.overrideWith((ref) => 3)],
+        overrides: [
+          recipeCountProvider.overrideWith(
+            (ref) => kMinRecipesForGeneration,
+          ),
+        ],
       );
       addTearDown(container.dispose);
       expect(container.read(canGenerateProvider), isTrue);
     });
 
-    test('est true quand plus de 3 recettes', () {
+    test('est true quand plus de $kMinRecipesForGeneration recettes', () {
       final container = ProviderContainer(
-        overrides: [recipeCountProvider.overrideWith((ref) => 10)],
+        overrides: [recipeCountProvider.overrideWith((ref) => 20)],
       );
       addTearDown(container.dispose);
       expect(container.read(canGenerateProvider), isTrue);
@@ -66,17 +71,20 @@ void main() {
 
   group('Banner de débloquage de la génération', () {
     testWidgets(
-        'message initial et compteur 0/3 quand 0 recettes',
-        (tester) async {
+        'message initial et compteur 0/$kMinRecipesForGeneration '
+        'quand 0 recettes', (tester) async {
       final db = _buildDb();
       await tester.pumpWidget(_buildHome(db: db, recipeCount: 0));
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Commence par ajouter 3 recettes pour générer un menu'),
+        find.text(
+          'Commence par ajouter $kMinRecipesForGeneration '
+          'recettes pour générer un menu',
+        ),
         findsOneWidget,
       );
-      expect(find.text('0/3'), findsOneWidget);
+      expect(find.text('0/$kMinRecipesForGeneration'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 100));
@@ -84,38 +92,57 @@ void main() {
     });
 
     testWidgets(
-        'message "Plus qu\'1 recette" et compteur 2/3 quand 2 recettes',
-        (tester) async {
+        'message "Plus qu\'1 recette" et compteur '
+        '${kMinRecipesForGeneration - 1}/$kMinRecipesForGeneration '
+        'quand ${kMinRecipesForGeneration - 1} recettes', (tester) async {
       final db = _buildDb();
-      await tester.pumpWidget(_buildHome(db: db, recipeCount: 2));
+      await tester.pumpWidget(
+        _buildHome(db: db, recipeCount: kMinRecipesForGeneration - 1),
+      );
       await tester.pumpAndSettle();
 
       expect(
         find.text("Plus qu'1 recette avant de pouvoir générer !"),
         findsOneWidget,
       );
-      expect(find.text('2/3'), findsOneWidget);
+      expect(
+        find.text(
+          '${kMinRecipesForGeneration - 1}/$kMinRecipesForGeneration',
+        ),
+        findsOneWidget,
+      );
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 100));
       await db.close();
     });
 
-    testWidgets('banner masqué quand 3 recettes', (tester) async {
+    testWidgets(
+        'banner masqué quand $kMinRecipesForGeneration recettes',
+        (tester) async {
       final db = _buildDb();
-      await tester.pumpWidget(_buildHome(db: db, recipeCount: 3));
+      await tester.pumpWidget(
+        _buildHome(db: db, recipeCount: kMinRecipesForGeneration),
+      );
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Commence par ajouter 3 recettes pour générer un menu'),
+        find.text(
+          'Commence par ajouter $kMinRecipesForGeneration '
+          'recettes pour générer un menu',
+        ),
         findsNothing,
       );
       expect(
         find.text("Plus qu'1 recette avant de pouvoir générer !"),
         findsNothing,
       );
-      // Le compteur X/3 disparaît avec le banner
-      expect(find.text('3/3'), findsNothing);
+      expect(
+        find.text(
+          '$kMinRecipesForGeneration/$kMinRecipesForGeneration',
+        ),
+        findsNothing,
+      );
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 100));
@@ -143,9 +170,9 @@ void main() {
       await db.close();
     });
 
-    testWidgets('bouton Générer désactivé quand 2 recettes', (tester) async {
+    testWidgets('bouton Générer désactivé quand 13 recettes', (tester) async {
       final db = _buildDb();
-      await tester.pumpWidget(_buildHome(db: db, recipeCount: 2));
+      await tester.pumpWidget(_buildHome(db: db, recipeCount: 13));
       await tester.pumpAndSettle();
 
       final button = tester.widget<TextButton>(
@@ -158,9 +185,13 @@ void main() {
       await db.close();
     });
 
-    testWidgets('bouton Générer actif quand 3 recettes', (tester) async {
+    testWidgets(
+        'bouton Générer actif quand $kMinRecipesForGeneration recettes',
+        (tester) async {
       final db = _buildDb();
-      await tester.pumpWidget(_buildHome(db: db, recipeCount: 3));
+      await tester.pumpWidget(
+        _buildHome(db: db, recipeCount: kMinRecipesForGeneration),
+      );
       await tester.pumpAndSettle();
 
       final button = tester.widget<TextButton>(

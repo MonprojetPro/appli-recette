@@ -4,6 +4,7 @@ import 'package:appli_recette/features/generation/presentation/widgets/meal_slot
 import 'package:appli_recette/features/generation/presentation/widgets/week_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -39,18 +40,30 @@ Widget _buildTestApp(Widget child) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void main() {
+  setUpAll(() async {
+    await initializeDateFormatting('fr_FR');
+  });
+
+  // Lundi 9 mars 2026
+  final monday = DateTime(2026, 3, 9);
+
   group('WeekGrid', () {
-    testWidgets('affiche 14 MealSlotCard quand tous les slots sont null', (tester) async {
+    testWidgets('affiche 7 lignes de jours quand tous les slots sont null',
+        (tester) async {
       final slots = List<MealSlotResult?>.filled(14, null);
 
       await tester.pumpWidget(_buildTestApp(
-        WeekGrid(slots: slots, recipesMap: const {}),
+        WeekGrid(slots: slots, recipesMap: const {}, monday: monday),
       ));
+      await tester.pump();
 
-      expect(find.byType(MealSlotCard), findsNWidgets(14));
+      // 7 labels de jours affichés (contenant "Lundi", "Mardi", etc.)
+      expect(find.textContaining('Lundi'), findsOneWidget);
+      expect(find.textContaining('Dimanche'), findsOneWidget);
     });
 
-    testWidgets('affiche le nom de la recette quand slot rempli', (tester) async {
+    testWidgets('affiche le nom de la recette quand slot rempli',
+        (tester) async {
       final recipe = _recipe('r1');
       final slots = [
         const MealSlotResult(recipeId: 'r1', dayIndex: 0, mealType: 'lunch'),
@@ -58,23 +71,27 @@ void main() {
       ];
 
       await tester.pumpWidget(_buildTestApp(
-        WeekGrid(slots: slots, recipesMap: {'r1': recipe}),
+        WeekGrid(
+          slots: slots,
+          recipesMap: {'r1': recipe},
+          monday: monday,
+        ),
       ));
+      await tester.pump();
 
       expect(find.text('Recette r1'), findsOneWidget);
     });
 
-    testWidgets('affiche les headers des jours', (tester) async {
+    testWidgets('affiche le header du premier et dernier jour', (tester) async {
       final slots = List<MealSlotResult?>.filled(14, null);
 
       await tester.pumpWidget(_buildTestApp(
-        WeekGrid(slots: slots, recipesMap: const {}),
+        WeekGrid(slots: slots, recipesMap: const {}, monday: monday),
       ));
+      await tester.pump();
 
-      expect(find.text('Lun'), findsOneWidget);
-      expect(find.text('Dim'), findsOneWidget);
-      expect(find.text('Midi'), findsOneWidget);
-      expect(find.text('Soir'), findsOneWidget);
+      expect(find.textContaining('Lundi'), findsOneWidget);
+      expect(find.textContaining('Dimanche'), findsOneWidget);
     });
   });
 

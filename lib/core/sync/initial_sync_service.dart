@@ -1,6 +1,7 @@
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:drift/drift.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 /// Synchronisation initiale depuis Supabase vers drift local.
 ///
@@ -16,9 +17,13 @@ class InitialSyncService {
 
   /// Télécharge toutes les données du foyer [householdId] depuis Supabase
   /// et les upserte dans drift.
+  /// Initialise aussi les présences par défaut pour tout membre sans planning.
   Future<void> syncFromSupabase(String householdId) async {
     await _syncMembers(householdId);
     await _syncRecipes(householdId);
+    await _syncIngredients(householdId);
+    await _syncRecipeSteps(householdId);
+    await _initMissingPresences(householdId);
   }
 
   // ── Members ───────────────────────────────────────────────────────────────
@@ -93,5 +98,105 @@ class InitialSyncService {
         batch.insertAllOnConflictUpdate(_db.recipes, companions);
       });
     }
+  }
+
+  // ── Ingredients ──────────────────────────────────────────────────────────
+
+  Future<void> _syncIngredients(String householdId) async {
+    final rows = await _client
+        .from('ingredients')
+        .select()
+        .eq('household_id', householdId);
+
+    final companions = (rows as List<dynamic>).map((row) {
+      final r = row as Map<String, dynamic>;
+      return IngredientsCompanion(
+        id: Value(r['id'] as String),
+        recipeId: Value(r['recipe_id'] as String),
+        name: Value(r['name'] as String),
+        quantity: Value((r['quantity'] as num?)?.toDouble()),
+        unit: Value(r['unit'] as String?),
+        supermarketSection: Value(r['supermarket_section'] as String?),
+        householdId: Value(householdId),
+      );
+    }).toList();
+
+    if (companions.isNotEmpty) {
+      await _db.batch((batch) {
+        batch.insertAllOnConflictUpdate(_db.ingredients, companions);
+      });
+    }
+  }
+
+  // ── RecipeSteps ─────────────────────────────────────────────────────────
+
+  Future<void> _syncRecipeSteps(String householdId) async {
+    // recipe_steps n'a pas de household_id — RLS filtre via recipes.household_id
+    // Récupère tous les recipe_steps accessibles (filtrés par RLS)
+    final rows = await _client
+        .from('recipe_steps')
+        .select();
+
+    final companions = (rows as List<dynamic>).map((row) {
+      final r = row as Map<String, dynamic>;
+      return RecipeStepsCompanion(
+        id: Value(r['id'] as String),
+        recipeId: Value(r['recipe_id'] as String),
+        stepNumber: Value((r['step_number'] as num).toInt()),
+        instruction: Value(r['instruction'] as String?),
+        photoPathsJson: Value(r['photo_paths_json'] as String?),
+      );
+    }).toList();
+
+    if (companions.isNotEmpty) {
+      await _db.batch((batch) {
+        batch.insertAllOnConflictUpdate(_db.recipeSteps, companions);
+      });
+    }
+  }
+
+  // ── Présences par défaut ─────────────────────────────────────────────────
+
+  /// Crée 14 entrées de présence (7 jours × 2 repas, tous présents)
+  /// pour chaque membre qui n'en a pas encore dans la DB locale.
+  Future<void> _initMissingPresences(String householdId) async {
+    // IDs des membres déjà syncés localement
+    final memberRows = await (_db.select(_db.members)
+          ..where((m) => m.householdId.equals(householdId)))
+        .get();
+
+    if (memberRows.isEmpty) return;
+
+    // IDs des membres qui ont déjà un planning type (weekKey null)
+    final existingQuery =
+        _db.selectOnly(_db.presenceSchedules, distinct: true)
+          ..addColumns([_db.presenceSchedules.memberId])
+          ..where(_db.presenceSchedules.weekKey.isNull());
+    final existingRows = await existingQuery.get();
+    final existingIds =
+        existingRows.map((r) => r.read(_db.presenceSchedules.memberId)!).toSet();
+
+    final missing =
+        memberRows.where((m) => !existingIds.contains(m.id)).toList();
+    if (missing.isEmpty) return;
+
+    await _db.batch((batch) {
+      for (final member in missing) {
+        for (var day = 1; day <= 7; day++) {
+          for (final slot in ['lunch', 'dinner']) {
+            batch.insert(
+              _db.presenceSchedules,
+              PresenceSchedulesCompanion.insert(
+                id: const Uuid().v4(),
+                memberId: member.id,
+                dayOfWeek: day,
+                mealSlot: slot,
+                householdId: Value(householdId),
+              ),
+            );
+          }
+        }
+      }
+    });
   }
 }

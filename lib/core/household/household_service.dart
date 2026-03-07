@@ -109,20 +109,63 @@ class HouseholdService {
 
     final householdId = result['id'] as String;
 
-    await _client.from('household_members').insert({
-      'household_id': householdId,
-      'user_id': user.id,
-      'role': 'member',
-    });
+    // Insert membre — ignore si déjà membre (contrainte unique household_id+user_id)
+    try {
+      await _client.from('household_members').insert({
+        'household_id': householdId,
+        'user_id': user.id,
+        'role': 'member',
+      });
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') rethrow;
+      // Déjà membre de ce foyer — on continue
+    }
+
+    // Enregistrer le device pour la RLS (get_my_household_id)
+    await _client.from('household_auth_devices').upsert(
+      {
+        'household_id': householdId,
+        'auth_user_id': user.id,
+        'joined_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict: 'auth_user_id',
+    );
 
     await _persistHouseholdId(householdId);
     await InitialSyncService(_db).syncFromSupabase(householdId);
   }
 
-  /// Retourne le [household_id] stocké localement, ou null si non défini.
+  /// Retourne le [household_id] stocké localement.
+  ///
+  /// Si absent localement mais que l'utilisateur est déjà lié à un foyer
+  /// dans Supabase (table household_auth_devices), récupère le household_id,
+  /// le persiste localement, lance la sync initiale, et le retourne.
+  /// Cela évite de redemander "Rejoindre un foyer" à chaque nouveau device/navigateur.
   Future<String?> getCurrentHouseholdId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyHouseholdId);
+    final local = prefs.getString(_keyHouseholdId);
+    if (local != null) return local;
+
+    // Pas de household_id local → vérifier dans Supabase
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+
+    try {
+      final row = await _client
+          .from('household_auth_devices')
+          .select('household_id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+
+      if (row == null) return null;
+
+      final householdId = row['household_id'] as String;
+      await _persistHouseholdId(householdId);
+      await InitialSyncService(_db).syncFromSupabase(householdId);
+      return householdId;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Met à jour tous les enregistrements locaux drift dont le [householdId]

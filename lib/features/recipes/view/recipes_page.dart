@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/core/utils/time_utils.dart';
+import 'package:appli_recette/core/widgets/recipe_photo_widget.dart';
 import 'package:appli_recette/features/recipes/presentation/providers/recipes_provider.dart';
 import 'package:appli_recette/features/recipes/presentation/widgets/recipe_quick_form.dart';
 import 'package:flutter/material.dart';
@@ -158,13 +157,13 @@ class _RecipeCard extends ConsumerWidget {
             SizedBox(
               width: 80,
               height: 80,
-              child: recipe.photoPath != null
-                  ? Image.file(
-                      File(recipe.photoPath!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (ctx, err, stack) => _MealTypeIcon(mealType),
-                    )
-                  : _MealTypeIcon(mealType),
+              child: RecipePhotoWidget(
+                photoUrl: recipe.photoPath,
+                width: 80,
+                height: 80,
+                fallbackIcon: mealType.icon,
+                fallbackIconSize: 28,
+              ),
             ),
 
             // Infos
@@ -241,17 +240,3 @@ class _RecipeCard extends ConsumerWidget {
 
 }
 
-class _MealTypeIcon extends StatelessWidget {
-  const _MealTypeIcon(this.mealType);
-  final MealType mealType;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppColors.primary.withAlpha(20),
-      child: Center(
-        child: Icon(mealType.icon, color: AppColors.primary, size: 28),
-      ),
-    );
-  }
-}

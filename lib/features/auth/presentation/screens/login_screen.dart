@@ -92,17 +92,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Logo
-                  const Icon(
-                    Icons.restaurant_menu,
-                    color: AppColors.primary,
-                    size: 56,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Appli Recette',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                  FractionallySizedBox(
+                    widthFactor: 0.8,
+                    child: Image.asset(
+                      'assets/icon/logo_menuzen.png',
+                      fit: BoxFit.contain,
                     ),
                   ),
                   const SizedBox(height: 8),

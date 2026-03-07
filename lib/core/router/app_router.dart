@@ -12,10 +12,12 @@ import 'package:appli_recette/features/onboarding/presentation/screens/household
 import 'package:appli_recette/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:appli_recette/features/planning/view/planning_page.dart';
 import 'package:appli_recette/features/recipes/view/create_full_recipe_page.dart';
-import 'package:appli_recette/features/recipes/view/edit_recipe_screen.dart';
-import 'package:appli_recette/features/recipes/view/new_recipe_page.dart';
 import 'package:appli_recette/features/recipes/view/recipe_detail_screen.dart';
 import 'package:appli_recette/features/recipes/view/recipes_page.dart';
+import 'package:appli_recette/features/generation/presentation/providers/generation_provider.dart';
+import 'package:appli_recette/features/planning/data/utils/week_utils.dart';
+import 'package:appli_recette/features/planning/presentation/providers/planning_provider.dart';
+import 'package:appli_recette/features/recipes/presentation/providers/recipes_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -166,7 +168,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       GoRoute(
         path: AppRoutes.newRecipe,
-        builder: (context, state) => const NewRecipePage(),
+        builder: (context, state) => const CreateFullRecipePage(),
       ),
       GoRoute(
         path: AppRoutes.createFullRecipe,
@@ -183,7 +185,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.recipeEdit,
         builder: (context, state) {
           final id = state.pathParameters['id']!;
-          return EditRecipeScreen(recipeId: id);
+          return CreateFullRecipePage(recipeId: id);
         },
       ),
 
@@ -210,8 +212,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
-/// Shell principal avec BottomNavigationBar + FAB.
-class AppShell extends StatelessWidget {
+/// Shell principal avec BottomNavigationBar + FAB contextuel.
+class AppShell extends ConsumerWidget {
   const AppShell({
     required this.navigationShell,
     super.key,
@@ -220,14 +222,10 @@ class AppShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       body: navigationShell,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(AppRoutes.newRecipe),
-        tooltip: 'Nouvelle recette',
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _buildFab(context, ref),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
@@ -261,5 +259,57 @@ class AppShell extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget? _buildFab(BuildContext context, WidgetRef ref) {
+    switch (navigationShell.currentIndex) {
+      case 0: // Accueil — Générer le menu
+        final canGenerate = ref.watch(canGenerateProvider);
+        if (!canGenerate) return null;
+        final weekKey = ref.watch(selectedWeekKeyProvider);
+        final menuAsync = ref.watch(generateMenuProvider);
+        final validatedAsync =
+            ref.watch(validatedMenuDisplayProvider(weekKey));
+        final isLoading = menuAsync.isLoading;
+        // Regénérer si un menu existe pour CETTE semaine (en mémoire ou en drift)
+        final hasMemoryMenu =
+            menuAsync.value != null && menuAsync.value!.weekKey == weekKey;
+        final hasValidatedMenu = validatedAsync.value != null;
+        final isRegenerate = hasMemoryMenu || hasValidatedMenu;
+        return FloatingActionButton(
+          onPressed: isLoading
+              ? null
+              : () {
+                  final filters = ref.read(filtersProvider);
+                  ref
+                      .read(generateMenuProvider.notifier)
+                      .generate(filters);
+                },
+          tooltip: isRegenerate ? 'Regénérer le menu' : 'Générer le menu',
+          child: isRegenerate
+              ? const Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(Icons.autorenew, size: 44),
+                    Icon(Icons.auto_awesome, size: 16),
+                  ],
+                )
+              : const Icon(Icons.auto_awesome),
+        );
+      case 1: // Recettes — Nouvelle recette
+        return FloatingActionButton(
+          onPressed: () => context.push(AppRoutes.newRecipe),
+          tooltip: 'Nouvelle recette',
+          child: const Icon(Icons.add),
+        );
+      case 2: // Foyer — Ajouter un membre
+        return FloatingActionButton(
+          onPressed: () => context.push(AppRoutes.memberAdd),
+          tooltip: 'Ajouter un membre',
+          child: const Icon(Icons.person_add),
+        );
+      default: // Planning — pas de FAB
+        return null;
+    }
   }
 }

@@ -17,14 +17,17 @@ const _dayLabelsFull = [
   'DIMANCHE',
 ];
 
-/// Couleur de fond pour les cellules override.
-const _overrideBackground = Color(0xFFFFF8E1);
-
 /// Hauteurs fixes pour aligner les deux côtés.
-const _headerHeight = 36.0;
+const _headerHeight = 48.0;
 const _dayBannerHeight = 28.0;
-const _mealRowHeight = 40.0;
+const _mealRowHeight = 44.0;
 const _dividerHeight = 1.0;
+
+/// Taille du cercle de présence.
+const _circleSize = 32.0;
+
+/// Couleur de bordure pour les overrides.
+const _overrideBorderColor = Color(0xFFF5C26B);
 
 /// Grille de toggles de présence : jours en lignes, membres en colonnes.
 ///
@@ -66,12 +69,42 @@ class PresenceToggleGrid extends ConsumerWidget {
     return overrideSlots.contains('$memberId|$dayOfWeek|$mealSlot');
   }
 
+  /// Bascule toute la colonne d'un membre :
+  /// si au moins un créneau est coché → tout décocher,
+  /// sinon tout cocher.
+  void _toggleAllForMember(WidgetRef ref, String memberId) {
+    final memberPresences = presences.where((p) => p.memberId == memberId);
+    final presentCount = memberPresences.where((p) => p.isPresent).length;
+    final targetPresent = presentCount == 0;
+
+    for (var day = 1; day <= 7; day++) {
+      for (final slot in ['lunch', 'dinner']) {
+        final current = _isPresent(memberId, day, slot);
+        if (current != targetPresent) {
+          if (weekKey != null) {
+            ref.read(planningNotifierProvider.notifier).toggleWeeklyPresence(
+                  weekKey: weekKey!,
+                  memberId: memberId,
+                  dayOfWeek: day,
+                  mealSlot: slot,
+                );
+          } else {
+            ref.read(planningNotifierProvider.notifier).togglePresence(
+                  memberId: memberId,
+                  dayOfWeek: day,
+                  mealSlot: slot,
+                );
+          }
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final primaryColor = theme.colorScheme.primary;
 
-    // Colonne fixe (labels) + colonnes scrollables (membres)
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -101,18 +134,20 @@ class PresenceToggleGrid extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header vide (aligné avec les prénoms)
+        // Header vide (aligné avec les prénoms + avatar)
         const SizedBox(height: _headerHeight),
 
         for (var dayIndex = 0; dayIndex < 7; dayIndex++) ...[
-          // Bande header jour
+          // Bande header jour — coins arrondis
           Container(
             width: 88,
             height: _dayBannerHeight,
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            color: AppColors.primaryLight
-                .withValues(alpha: 0.35),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Text(
               _dayLabelsFull[dayIndex],
               style: theme.textTheme.labelMedium?.copyWith(
@@ -152,12 +187,14 @@ class PresenceToggleGrid extends ConsumerWidget {
             ),
           ),
 
-          // Séparateur
+          // Séparateur plus doux
           if (dayIndex < 6)
-            const SizedBox(
+            SizedBox(
               width: 88,
               height: _dividerHeight,
-              child: ColoredBox(color: AppColors.divider),
+              child: ColoredBox(
+                color: AppColors.divider.withValues(alpha: 0.5),
+              ),
             ),
         ],
       ],
@@ -179,21 +216,46 @@ class PresenceToggleGrid extends ConsumerWidget {
       columnWidths: memberColWidths,
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
-        // Header : prénoms
+        // Header : avatar + prénoms (tap pour tout cocher/décocher)
         TableRow(
           children: [
             for (final member in members)
               SizedBox(
                 height: _headerHeight,
-                child: Center(
-                  child: Text(
-                    member.name,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                child: GestureDetector(
+                  onTap: () => _toggleAllForMember(ref, member.id),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Mini avatar avec initiale
+                      CircleAvatar(
+                        radius: 10,
+                        backgroundColor: primaryColor.withValues(alpha: 0.15),
+                        child: Text(
+                          member.name.isNotEmpty
+                              ? member.name[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        member.name,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                          decoration: TextDecoration.underline,
+                          decorationColor:
+                              primaryColor.withValues(alpha: 0.4),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -201,11 +263,11 @@ class PresenceToggleGrid extends ConsumerWidget {
         ),
 
         for (var dayIndex = 0; dayIndex < 7; dayIndex++) ...[
-          // Bande jour (cellules vides colorées)
+          // Bande jour (cellules vides colorées, coins arrondis)
           TableRow(
             decoration: BoxDecoration(
-              color: AppColors.primaryLight
-                  .withValues(alpha: 0.35),
+              color: AppColors.primaryLight.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(6),
             ),
             children: [
               for (var i = 0; i < members.length; i++)
@@ -233,14 +295,16 @@ class PresenceToggleGrid extends ConsumerWidget {
             backgroundColor: AppColors.soirBackground,
           ),
 
-          // Séparateur
+          // Séparateur plus doux
           if (dayIndex < 6)
             TableRow(
               children: [
                 for (var i = 0; i < members.length; i++)
-                  const SizedBox(
+                  SizedBox(
                     height: _dividerHeight,
-                    child: ColoredBox(color: AppColors.divider),
+                    child: ColoredBox(
+                      color: AppColors.divider.withValues(alpha: 0.5),
+                    ),
                   ),
               ],
             ),
@@ -269,50 +333,50 @@ class PresenceToggleGrid extends ConsumerWidget {
                   ' — ${_dayLabelsFull[dayOfWeek - 1]}'
                   ' ${mealSlot == "lunch" ? "midi" : "soir"}',
               child: _PresenceCell(
-              isPresent: _isPresent(
-                member.id,
-                dayOfWeek,
-                mealSlot,
+                isPresent: _isPresent(
+                  member.id,
+                  dayOfWeek,
+                  mealSlot,
+                ),
+                isOverride: _isOverride(
+                  member.id,
+                  dayOfWeek,
+                  mealSlot,
+                ),
+                primaryColor: primaryColor,
+                onToggle: () {
+                  if (weekKey != null) {
+                    unawaited(
+                      ref
+                          .read(planningNotifierProvider.notifier)
+                          .toggleWeeklyPresence(
+                            weekKey: weekKey!,
+                            memberId: member.id,
+                            dayOfWeek: dayOfWeek,
+                            mealSlot: mealSlot,
+                          ),
+                    );
+                  } else {
+                    unawaited(
+                      ref
+                          .read(planningNotifierProvider.notifier)
+                          .togglePresence(
+                            memberId: member.id,
+                            dayOfWeek: dayOfWeek,
+                            mealSlot: mealSlot,
+                          ),
+                    );
+                  }
+                },
               ),
-              isOverride: _isOverride(
-                member.id,
-                dayOfWeek,
-                mealSlot,
-              ),
-              primaryColor: primaryColor,
-              onToggle: () {
-                if (weekKey != null) {
-                  unawaited(
-                    ref
-                        .read(planningNotifierProvider.notifier)
-                        .toggleWeeklyPresence(
-                          weekKey: weekKey!,
-                          memberId: member.id,
-                          dayOfWeek: dayOfWeek,
-                          mealSlot: mealSlot,
-                        ),
-                  );
-                } else {
-                  unawaited(
-                    ref
-                        .read(planningNotifierProvider.notifier)
-                        .togglePresence(
-                          memberId: member.id,
-                          dayOfWeek: dayOfWeek,
-                          mealSlot: mealSlot,
-                        ),
-                  );
-                }
-              },
             ),
-          ),
           ),
       ],
     );
   }
 }
 
-/// Cellule de présence avec distinction visuelle pour les overrides.
+/// Cellule de présence : cercle coloré tappable avec animation.
 class _PresenceCell extends StatelessWidget {
   const _PresenceCell({
     required this.isPresent,
@@ -328,22 +392,39 @@ class _PresenceCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: isOverride
-          ? BoxDecoration(
-              color: _overrideBackground,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: primaryColor.withValues(alpha: 0.4),
-              ),
-            )
-          : null,
-      child: Checkbox(
-        value: isPresent,
-        activeColor: primaryColor,
-        onChanged: (_) => onToggle(),
+    return GestureDetector(
+      onTap: onToggle,
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          width: _circleSize,
+          height: _circleSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isPresent ? primaryColor : Colors.transparent,
+            border: Border.all(
+              color: isOverride
+                  ? _overrideBorderColor
+                  : isPresent
+                      ? primaryColor
+                      : Colors.grey.shade300,
+              width: isOverride ? 2.5 : 2,
+            ),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
+            child: isPresent
+                ? const Icon(
+                    Icons.check,
+                    key: ValueKey('check'),
+                    size: 16,
+                    color: Colors.white,
+                  )
+                : const SizedBox.shrink(key: ValueKey('empty')),
+          ),
+        ),
       ),
     );
   }

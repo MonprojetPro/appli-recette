@@ -30,6 +30,7 @@ class GenerationService {
   List<MealSlotResult?> generateMenu(
     GenerationInput input, {
     Set<int>? lockedSlotIndices,
+    Set<String>? lockedRecipeIds,
   }) {
     // Précalcul : map recipeId → set de memberIds qui la détestent
     final dislikedByMember = _buildDislikedMap(input.ratings);
@@ -41,8 +42,8 @@ class GenerationService {
         .whereType<String>()
         .toSet();
 
-    // Recettes déjà sélectionnées dans cette génération (déduplication)
-    final usedRecipeIds = <String>{};
+    // Recettes déjà sélectionnées (inclut les verrouillées pour éviter les doublons)
+    final usedRecipeIds = <String>{...?lockedRecipeIds};
 
     // Mélanger les recettes une fois pour diversifier le résultat
     final shuffledRecipes = List<Recipe>.from(input.recipes)..shuffle(_random);
@@ -125,7 +126,9 @@ class GenerationService {
   // ─────────────────────────────────────────────────────────────────────────
 
   List<Recipe> _filterByMealType(List<Recipe> recipes, String mealType) =>
-      recipes.where((r) => r.mealType == mealType).toList();
+      recipes
+          .where((r) => r.mealType == mealType || r.mealType == 'both')
+          .toList();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Couche 1bis : filtres utilisateur

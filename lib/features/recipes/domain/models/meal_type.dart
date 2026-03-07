@@ -5,6 +5,7 @@ enum MealType {
   breakfast('breakfast', 'Petit-déjeuner', Icons.free_breakfast_outlined),
   lunch('lunch', 'Déjeuner', Icons.lunch_dining_outlined),
   dinner('dinner', 'Dîner', Icons.dinner_dining_outlined),
+  both('both', 'Déjeuner + Dîner', Icons.restaurant_outlined),
   snack('snack', 'Goûter', Icons.cookie_outlined),
   dessert('dessert', 'Dessert', Icons.cake_outlined);
 

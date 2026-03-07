@@ -1,3 +1,4 @@
+import 'package:appli_recette/core/auth/auth_state_provider.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
 import 'package:appli_recette/core/household/household_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,10 +9,16 @@ final householdServiceProvider = Provider<HouseholdService>((ref) {
   return HouseholdService(db);
 });
 
-/// Provider du household_id courant (lu depuis SharedPreferences).
+/// Provider du household_id courant.
 ///
-/// Retourne null si aucun foyer n'est configuré.
+/// 1. Vérifie SharedPreferences (local).
+/// 2. Si absent, vérifie Supabase household_auth_devices (auto-résolution).
+///    Cela évite de redemander "Rejoindre un foyer" sur un nouveau navigateur.
+///
+/// Dépend de [authStateProvider] pour se ré-évaluer quand la session est prête.
 final currentHouseholdIdProvider = FutureProvider<String?>((ref) async {
+  // Se ré-évaluer quand l'état auth change (session restaurée)
+  ref.watch(authStateProvider);
   final service = ref.watch(householdServiceProvider);
   return service.getCurrentHouseholdId();
 });

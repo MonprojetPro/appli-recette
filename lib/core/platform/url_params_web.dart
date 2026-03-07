@@ -1,8 +1,7 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 
 /// Implémentation web — lit le query param `?code=` depuis `window.location`.
 String? extractCodeFromUrl() {
-  final uri = Uri.parse(html.window.location.href);
+  final uri = Uri.parse(web.window.location.href);
   return uri.queryParameters['code'];
 }

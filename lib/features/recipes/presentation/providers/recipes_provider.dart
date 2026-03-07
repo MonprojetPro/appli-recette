@@ -2,6 +2,7 @@ import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
 import 'package:appli_recette/core/storage/image_service.dart';
+import 'package:appli_recette/core/storage/supabase_storage_service.dart';
 import 'package:appli_recette/core/sync/sync_provider.dart';
 import 'package:appli_recette/features/recipes/data/datasources/ingredient_local_datasource.dart';
 import 'package:appli_recette/features/recipes/data/datasources/recipe_local_datasource.dart';
@@ -11,12 +12,18 @@ import 'package:appli_recette/features/recipes/data/repositories/recipe_reposito
 import 'package:appli_recette/features/recipes/domain/repositories/ingredient_repository.dart';
 import 'package:appli_recette/features/recipes/domain/repositories/recipe_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ---------------------------------------------------------------------------
 // Infrastructure providers
 // ---------------------------------------------------------------------------
 
 final imageServiceProvider = Provider<ImageService>((ref) => ImageService());
+
+final supabaseStorageServiceProvider =
+    Provider<SupabaseStorageService>((ref) {
+  return SupabaseStorageService(Supabase.instance.client);
+});
 
 final recipeLocalDatasourceProvider = Provider<RecipeLocalDatasource>((ref) {
   final db = ref.watch(databaseProvider);
@@ -81,6 +88,13 @@ final recipeByIdProvider =
     StreamProvider.family<Recipe?, String>((ref, id) {
   final repo = ref.watch(recipeRepositoryProvider);
   return repo.watchById(id);
+});
+
+/// Stream des étapes de préparation d'une recette.
+final stepsForRecipeProvider =
+    StreamProvider.family<List<RecipeStep>, String>((ref, recipeId) {
+  final datasource = ref.watch(recipeStepsDatasourceProvider);
+  return datasource.watchForRecipe(recipeId);
 });
 
 /// Nombre de recettes dans la collection (dérivé de [recipesStreamProvider]).

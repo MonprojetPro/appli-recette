@@ -113,30 +113,55 @@ class GenerateMenuNotifier
       final weekKey = ref.read(selectedWeekKeyProvider);
 
       // Collecter les données depuis les providers existants
-      final recipes = await ref.read(recipesStreamProvider.future);
-      final members = await ref.read(membersStreamProvider.future);
-      final presences =
-          await ref.read(mergedPresencesStreamProvider(weekKey).future);
-      final ratings = await ref.read(allRatingsStreamProvider.future);
-      final previousSlots = await ref.read(previousMenuSlotsProvider.future);
-
+      // Utiliser .first sur les streams directs pour éviter un blocage
+      // lorsque les StreamProviders ne sont pas actifs (non watchés).
+      final recipes = await ref
+          .read(recipeRepositoryProvider)
+          .watchAll()
+          .first;
+      final members = await ref
+          .read(householdRepositoryProvider)
+          .watchAll()
+          .first;
+      final presences = await ref
+          .read(planningRepositoryProvider)
+          .watchMergedPresences(weekKey)
+          .first;
+      final ratings = await ref
+          .read(_mealRatingDatasourceProvider)
+          .watchAll()
+          .first;
+      // Chaque semaine est indépendante — pas de déduplication inter-semaines
       final input = GenerationInput(
         weekKey: weekKey,
         recipes: recipes,
         members: members,
         presences: presences,
         ratings: ratings,
-        previousMenuSlots: previousSlots,
+        previousMenuSlots: const [],
         filters: filters,
       );
 
       final currentState = state.value;
       final lockedIndices = currentState?.lockedSlotIndices ?? {};
 
+      // Collecter les recipeIds des slots verrouillés pour la déduplication
+      final lockedRecipeIds = <String>{};
+      if (currentState != null && lockedIndices.isNotEmpty) {
+        for (final idx in lockedIndices) {
+          final slot = currentState.slots[idx];
+          if (slot != null && !slot.isSpecialEvent) {
+            lockedRecipeIds.add(slot.recipeId);
+          }
+        }
+      }
+
       final service = GenerationService();
       final slots = service.generateMenu(
         input,
         lockedSlotIndices: lockedIndices.isNotEmpty ? lockedIndices : null,
+        lockedRecipeIds:
+            lockedRecipeIds.isNotEmpty ? lockedRecipeIds : null,
       );
 
       // Si regénération partielle, conserver les slots verrouillés
@@ -147,11 +172,19 @@ class GenerateMenuNotifier
         }
       }
 
-      return GeneratedMenuState(
+      final result = GeneratedMenuState(
         slots: mergedSlots,
         weekKey: weekKey,
         lockedSlotIndices: lockedIndices,
       );
+
+      // Auto-save en drift dès la génération
+      await ref.read(menuHistoryNotifierProvider.notifier).save(
+            weekKey: weekKey,
+            slots: mergedSlots,
+          );
+
+      return result;
     });
   }
 
@@ -202,7 +235,7 @@ class GenerateMenuNotifier
   }
 
   /// Marque le créneau [slotIndex] comme événement spécial (sans recette).
-  void setSpecialEvent(int slotIndex) {
+  void setSpecialEvent(int slotIndex, {String? label}) {
     final current = state.value;
     if (current == null) return;
 
@@ -215,6 +248,7 @@ class GenerateMenuNotifier
       dayIndex: dayIndex,
       mealType: mealType,
       isSpecialEvent: true,
+      eventLabel: label,
     );
     state = AsyncValue.data(current.copyWith(slots: newSlots));
   }
@@ -226,6 +260,11 @@ class GenerateMenuNotifier
     state = AsyncValue.data(current.copyWith(isValidated: true));
   }
 
+  /// Charge un état existant (depuis drift) pour permettre les interactions.
+  void loadFromState(GeneratedMenuState menuState) {
+    state = AsyncValue.data(menuState);
+  }
+
   /// Réinitialise la génération.
   void reset() => state = const AsyncValue.data(null);
 }
@@ -234,6 +273,45 @@ final generateMenuProvider =
     AsyncNotifierProvider<GenerateMenuNotifier, GeneratedMenuState?>(
   GenerateMenuNotifier.new,
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Providers dérivés (Story 5.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validated Menu Display (historique semaines)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Charge un menu validé depuis drift pour une semaine donnée et le convertit
+/// en [GeneratedMenuState] read-only. Retourne null si aucun menu n'existe.
+final validatedMenuDisplayProvider =
+    FutureProvider.family<GeneratedMenuState?, String>((ref, weekKey) async {
+  final menu = await ref.watch(menuForWeekProvider(weekKey).future);
+  if (menu == null) return null;
+
+  final slots =
+      await ref.read(menuRepositoryProvider).getSlotsForMenu(menu.id);
+
+  // Convertir les MenuSlot drift en liste de 14 MealSlotResult?
+  final resultSlots = List<MealSlotResult?>.filled(14, null);
+  for (final slot in slots) {
+    // dayOfWeek: 1=lundi → index 0, mealSlot: lunch=even, dinner=odd
+    final dayIndex = slot.dayOfWeek - 1;
+    final slotIndex = dayIndex * 2 + (slot.mealSlot == 'dinner' ? 1 : 0);
+    if (slotIndex >= 0 && slotIndex < 14) {
+      resultSlots[slotIndex] = MealSlotResult(
+        recipeId: slot.recipeId ?? '',
+        dayIndex: dayIndex,
+        mealType: slot.mealSlot,
+      );
+    }
+  }
+
+  return GeneratedMenuState(
+    slots: resultSlots,
+    weekKey: weekKey,
+  );
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Providers dérivés (Story 5.4)

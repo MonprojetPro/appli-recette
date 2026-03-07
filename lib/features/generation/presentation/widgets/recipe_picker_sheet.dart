@@ -145,6 +145,7 @@ class _RecipePickerSheetState extends State<RecipePickerSheet> {
         'breakfast' => 'Petit-déjeuner',
         'lunch' => 'Déjeuner',
         'dinner' => 'Dîner',
+        'both' => 'Déjeuner + Dîner',
         'snack' => 'Goûter',
         'dessert' => 'Dessert',
         _ => mealType,

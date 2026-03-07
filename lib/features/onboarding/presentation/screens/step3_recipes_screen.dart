@@ -1,14 +1,16 @@
 import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/features/recipes/presentation/providers/recipes_provider.dart';
+import 'package:appli_recette/features/recipes/view/create_full_recipe_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Étape 3 de l'onboarding : ajout des premières recettes.
 ///
-/// Affiche un formulaire simplifié + compteur "X/3 recettes".
+/// Ouvre la page complète de création de recette via un bouton.
+/// Le compteur "X/14 recettes" guide l'utilisateur vers le minimum requis.
 /// Le bouton Terminer est actif dès qu'au moins 1 recette a été ajoutée.
-class Step3RecipesScreen extends ConsumerStatefulWidget {
+class Step3RecipesScreen extends ConsumerWidget {
   const Step3RecipesScreen({
     required this.onComplete,
     required this.onPrevious,
@@ -19,63 +21,12 @@ class Step3RecipesScreen extends ConsumerStatefulWidget {
   final VoidCallback onPrevious;
 
   @override
-  ConsumerState<Step3RecipesScreen> createState() =>
-      _Step3RecipesScreenState();
-}
-
-class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  String _selectedMealType = 'lunch';
-  bool _isAdding = false;
-
-  /// Seuls lunch et dinner sont utilisés par l'algorithme de génération
-  /// (14 créneaux = 7 jours × 2 repas). Les autres types ne seraient
-  /// jamais sélectionnés, donnant une mauvaise première expérience.
-  static const _mealTypes = [
-    ('lunch', 'Déjeuner'),
-    ('dinner', 'Dîner'),
-  ];
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _addRecipe() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final name = _nameController.text.trim();
-    setState(() => _isAdding = true);
-    try {
-      await ref.read(recipesNotifierProvider.notifier).createRecipe(
-            name: name,
-            mealType: _selectedMealType,
-            prepTimeMinutes: 15, // Défaut raisonnable pour l'onboarding
-          );
-      _nameController.clear();
-      _formKey.currentState?.reset();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur : $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isAdding = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final recipes = ref.watch(recipesStreamProvider).value ?? [];
     final count = recipes.length;
-    final remaining = (kMinRecipesForGeneration - count).clamp(0, kMinRecipesForGeneration);
+    final remaining =
+        (kMinRecipesForGeneration - count).clamp(0, kMinRecipesForGeneration);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
@@ -91,7 +42,8 @@ class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '$kMinRecipesForGeneration recettes suffisent pour générer ton premier menu !',
+            '$kMinRecipesForGeneration recettes suffisent pour générer '
+            'ton premier menu (7 jours × 2 repas) !',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -100,75 +52,27 @@ class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
 
           // Compteur de progression
           _RecipeProgressBanner(count: count),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
-          // Formulaire d'ajout rapide
-          Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: _nameController,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Nom de la recette *',
-                    hintText: 'Ex: Pâtes bolognaise',
-                    prefixIcon: Icon(Icons.restaurant_menu_outlined),
+          // Bouton d'ajout — ouvre la page complète
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const CreateFullRecipePage(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Le nom est requis';
-                    }
-                    return null;
-                  },
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _addRecipe(),
-                ),
-                const SizedBox(height: 12),
-
-                // Type de repas
-                DropdownButtonFormField<String>(
-                  value: _selectedMealType,
-                  decoration: const InputDecoration(
-                    labelText: 'Type de repas',
-                    prefixIcon: Icon(Icons.schedule_outlined),
-                  ),
-                  items: _mealTypes
-                      .map(
-                        (t) => DropdownMenuItem(
-                          value: t.$1,
-                          child: Text(t.$2),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) setState(() => _selectedMealType = v);
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _isAdding ? null : _addRecipe,
-                    icon: _isAdding
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add),
-                    label: const Text('Ajouter cette recette'),
-                  ),
-                ),
-              ],
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Ajouter une recette'),
             ),
           ),
+          const SizedBox(height: 16),
 
-          const SizedBox(height: 12),
-
-          // Recettes ajoutées
+          // Liste des recettes ajoutées
           if (recipes.isNotEmpty)
             Expanded(
               child: ListView.builder(
@@ -186,6 +90,12 @@ class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
                       r.name,
                       style: theme.textTheme.bodyMedium,
                     ),
+                    subtitle: Text(
+                      r.mealType == 'lunch' ? 'Déjeuner' : 'Dîner',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   );
                 },
               ),
@@ -195,7 +105,7 @@ class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
 
           const SizedBox(height: 12),
 
-          // Message d'encouragement si < 3 recettes
+          // Message d'encouragement
           if (remaining > 0 && count > 0)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -215,7 +125,7 @@ class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
           Row(
             children: [
               TextButton.icon(
-                onPressed: widget.onPrevious,
+                onPressed: onPrevious,
                 icon: const Icon(Icons.arrow_back),
                 label: const Text('Retour'),
               ),
@@ -225,7 +135,7 @@ class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
                 child: SizedBox(
                   height: 48,
                   child: FilledButton(
-                    onPressed: count >= 1 ? widget.onComplete : null,
+                    onPressed: count >= 1 ? onComplete : null,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       disabledBackgroundColor: AppColors.disabled,
@@ -246,7 +156,7 @@ class _Step3RecipesScreenState extends ConsumerState<Step3RecipesScreen> {
   }
 }
 
-/// Banner affichant la progression "X/3 recettes".
+/// Banner affichant la progression "X/14 recettes".
 class _RecipeProgressBanner extends StatelessWidget {
   const _RecipeProgressBanner({required this.count});
 

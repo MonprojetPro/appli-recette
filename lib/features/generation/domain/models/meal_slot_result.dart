@@ -8,6 +8,7 @@ class MealSlotResult {
     required this.dayIndex,
     required this.mealType,
     this.isSpecialEvent = false,
+    this.eventLabel,
   });
 
   /// ID (UUID v4) de la recette assignée à ce créneau.
@@ -23,17 +24,22 @@ class MealSlotResult {
   /// True si le créneau est marqué comme événement spécial (sans recette).
   final bool isSpecialEvent;
 
+  /// Label optionnel pour les événements spéciaux (ex: "Anniversaire").
+  final String? eventLabel;
+
   MealSlotResult copyWith({
     String? recipeId,
     int? dayIndex,
     String? mealType,
     bool? isSpecialEvent,
+    String? eventLabel,
   }) {
     return MealSlotResult(
       recipeId: recipeId ?? this.recipeId,
       dayIndex: dayIndex ?? this.dayIndex,
       mealType: mealType ?? this.mealType,
       isSpecialEvent: isSpecialEvent ?? this.isSpecialEvent,
+      eventLabel: eventLabel ?? this.eventLabel,
     );
   }
 
@@ -45,12 +51,14 @@ class MealSlotResult {
           recipeId == other.recipeId &&
           dayIndex == other.dayIndex &&
           mealType == other.mealType &&
-          isSpecialEvent == other.isSpecialEvent;
+          isSpecialEvent == other.isSpecialEvent &&
+          eventLabel == other.eventLabel;
 
   @override
   int get hashCode =>
       recipeId.hashCode ^
       dayIndex.hashCode ^
       mealType.hashCode ^
-      isSpecialEvent.hashCode;
+      isSpecialEvent.hashCode ^
+      eventLabel.hashCode;
 }

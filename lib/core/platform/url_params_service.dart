@@ -1,6 +1,5 @@
 import 'url_params_stub.dart'
-    // ignore: uri_does_not_exist
-    if (dart.library.html) 'url_params_web.dart';
+    if (dart.library.js_interop) 'url_params_web.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

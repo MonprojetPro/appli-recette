@@ -70,24 +70,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Column(
                 children: [
-                  // Logo / Titre app
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.restaurant_menu,
-                        color: AppColors.primary,
-                        size: 28,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Appli Recette',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
+                  // Logo
+                  Image.asset(
+                    'assets/icon/logo_menuzen.png',
+                    height: 40,
                   ),
                   const SizedBox(height: 20),
 

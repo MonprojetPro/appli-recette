@@ -1,9 +1,7 @@
 import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
-import 'package:appli_recette/core/router/app_router.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/core/widgets/sync_status_badge.dart';
-import 'package:appli_recette/features/generation/domain/models/generation_filters.dart';
 import 'package:appli_recette/features/generation/presentation/providers/generation_provider.dart';
 import 'package:appli_recette/features/generation/presentation/providers/menu_provider.dart';
 import 'package:appli_recette/features/generation/presentation/widgets/generation_filters_sheet.dart';
@@ -11,11 +9,14 @@ import 'package:appli_recette/features/generation/presentation/widgets/incomplet
 import 'package:appli_recette/features/generation/presentation/widgets/meal_slot_bottom_sheet.dart';
 import 'package:appli_recette/features/generation/presentation/widgets/recipe_picker_sheet.dart';
 import 'package:appli_recette/features/generation/presentation/widgets/week_grid.dart';
+import 'package:appli_recette/features/planning/data/utils/week_utils.dart';
 import 'package:appli_recette/features/planning/presentation/providers/planning_provider.dart';
+import 'package:appli_recette/features/planning/presentation/widgets/week_selector.dart';
 import 'package:appli_recette/features/recipes/presentation/providers/recipes_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 /// Écran d'accueil — affiche la grille semaine et le menu généré.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -41,107 +42,84 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     });
 
+    final weekKey = ref.watch(selectedWeekKeyProvider);
+    final isCurrentWeek = weekKey == currentWeekKey();
     final menuAsync = ref.watch(generateMenuProvider);
     final hasActiveFilters = ref.watch(hasActiveFiltersProvider);
-    final hasUnlocked = ref.watch(hasUnlockedSlotsProvider);
     final recipesAsync = ref.watch(recipesStreamProvider);
-    final weekKey = ref.watch(selectedWeekKeyProvider);
     final canGenerate = ref.watch(canGenerateProvider);
     final recipeCount = ref.watch(recipeCountProvider);
 
+    final recipes = recipesAsync.value ?? <Recipe>[];
     final recipesMap = <String, Recipe>{
-      for (final r in recipesAsync.value ?? []) r.id: r,
+      for (final r in recipes) r.id: r,
     };
+
+    final dateRange = weekKeyToDateRange(weekKey);
+    final title = _formatWeekTitle(dateRange.monday, dateRange.sunday);
+
+    // Déterminer si la génération en cours correspond à cette semaine
+    final generationState = menuAsync.value;
+    final hasGenerationForWeek =
+        generationState != null && generationState.weekKey == weekKey;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Semaine $weekKey'),
+        title: Image.asset(
+          'assets/icon/logo_menuzen.png',
+          height: 32,
+        ),
         actions: [
-          // ── Badge sync cloud (AC-7 Story 7.1) ──
           const SyncStatusBadge(),
 
-          // ── Icône filtres ──
+          // Filtres de génération
           Stack(
-            clipBehavior: Clip.none,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.tune),
-                tooltip: 'Filtres',
-                onPressed: _openFiltersSheet,
-              ),
-              if (hasActiveFilters)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.tune),
+                  tooltip: 'Filtres',
+                  onPressed: _openFiltersSheet,
+                ),
+                if (hasActiveFilters)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
 
-          // ── Bouton Générer (désactivé si < 3 recettes) ──
-          menuAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-            data: (menuState) {
-              if (menuState != null && hasUnlocked) {
-                return TextButton.icon(
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Regénérer'),
-                  onPressed: canGenerate ? _generate : null,
-                );
-              }
-              return TextButton(
-                onPressed: canGenerate ? _generate : null,
-                child: const Text('Générer'),
-              );
-            },
-          ),
+          // Générer/Regénérer déplacé dans le FAB contextuel (AppShell)
         ],
       ),
       body: Column(
         children: [
+          // ── Sélecteur de semaine ──
+          const WeekSelector(),
+
           // ── Banner débloquage (Story 6.2) ──
-          if (!canGenerate)
+          if (isCurrentWeek && !canGenerate)
             _GenerationUnlockBanner(recipeCount: recipeCount),
 
           // ── Contenu principal ──
           Expanded(
-            child: menuAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Impossible de générer le menu.\nRéessaie dans un instant.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: canGenerate ? _generate : null,
-                      child: const Text('Réessayer'),
-                    ),
-                  ],
-                ),
-              ),
-              data: (menuState) {
-                if (menuState == null) {
-                  return _buildEmptyState(context);
-                }
-                return _buildMenuView(
-                    context, menuState, recipesMap, weekKey);
-              },
+            child: _buildContent(
+              context: context,
+              weekKey: weekKey,
+              isCurrentWeek: isCurrentWeek,
+              hasGenerationForWeek: hasGenerationForWeek,
+              menuAsync: menuAsync,
+              recipesMap: recipesMap,
+              canGenerate: canGenerate,
+              dateRange: dateRange,
             ),
           ),
         ],
@@ -150,10 +128,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Contenu principal — logique d'affichage selon la semaine
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildContent({
+    required BuildContext context,
+    required String weekKey,
+    required bool isCurrentWeek,
+    required bool hasGenerationForWeek,
+    required AsyncValue<GeneratedMenuState?> menuAsync,
+    required Map<String, Recipe> recipesMap,
+    required bool canGenerate,
+    required ({DateTime monday, DateTime sunday}) dateRange,
+  }) {
+    // Cas 1: Génération en cours / existante pour cette semaine
+    if (hasGenerationForWeek) {
+      return menuAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _buildErrorState(context, canGenerate),
+        data: (menuState) {
+          if (menuState == null) {
+            return _buildCurrentWeekEmpty(context, weekKey);
+          }
+          return _buildMenuView(
+            context,
+            menuState,
+            recipesMap,
+            weekKey,
+            dateRange.monday,
+          );
+        },
+      );
+    }
+
+    // Cas 2: Pas de génération en mémoire — vérifier menuAsync puis drift
+    return menuAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => _buildErrorState(context, canGenerate),
+      data: (menuState) {
+        if (menuState != null && menuState.weekKey == weekKey) {
+          return _buildMenuView(
+            context,
+            menuState,
+            recipesMap,
+            weekKey,
+            dateRange.monday,
+          );
+        }
+        // Pas de génération en cours → vérifier historique drift
+        return _buildValidatedMenuOrEmpty(
+          context,
+          weekKey,
+          recipesMap,
+          dateRange.monday,
+          showGenerateHint: true,
+        );
+      },
+    );
+  }
+
+  /// Charge un menu validé depuis drift ou affiche un état vide.
+  Widget _buildValidatedMenuOrEmpty(
+    BuildContext context,
+    String weekKey,
+    Map<String, Recipe> recipesMap,
+    DateTime monday, {
+    required bool showGenerateHint,
+  }) {
+    final validatedAsync = ref.watch(validatedMenuDisplayProvider(weekKey));
+
+    return validatedAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => _buildEmptyState(context, showGenerateHint: false),
+      data: (validatedMenu) {
+        if (validatedMenu == null) {
+          return _buildEmptyState(
+            context,
+            showGenerateHint: showGenerateHint,
+          );
+        }
+        // Charger le menu drift dans generateMenuProvider pour
+        // que les interactions (cadenas, events, etc.) fonctionnent
+        final currentGen = ref.read(generateMenuProvider).value;
+        if (currentGen == null || currentGen.weekKey != weekKey) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(generateMenuProvider.notifier).loadFromState(
+                  validatedMenu,
+                );
+          });
+        }
+        return _buildMenuView(
+          context,
+          validatedMenu,
+          recipesMap,
+          weekKey,
+          monday,
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // État vide
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildCurrentWeekEmpty(BuildContext context, String weekKey) {
+    // Semaine courante sans génération → vérifier s'il y a un menu validé
+    final recipesAsync = ref.watch(recipesStreamProvider);
+    final recipes = recipesAsync.value ?? <Recipe>[];
+    final recipesMap = <String, Recipe>{
+      for (final r in recipes) r.id: r,
+    };
+    final dateRange = weekKeyToDateRange(weekKey);
+    return _buildValidatedMenuOrEmpty(
+      context,
+      weekKey,
+      recipesMap,
+      dateRange.monday,
+      showGenerateHint: true,
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context, {
+    bool showGenerateHint = true,
+  }) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -162,11 +261,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           Text(
-            'Tape Générer pour planifier ta semaine',
+            showGenerateHint
+                ? 'Tape Générer pour planifier ta semaine'
+                : 'Aucun menu pour cette semaine',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Colors.grey.shade600,
                 ),
             textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, bool canGenerate) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, size: 48),
+          const SizedBox(height: 8),
+          Text(
+            'Impossible de générer le menu.\nRéessaie dans un instant.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: canGenerate ? _generate : null,
+            child: const Text('Réessayer'),
           ),
         ],
       ),
@@ -182,6 +305,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     GeneratedMenuState menuState,
     Map<String, Recipe> recipesMap,
     String weekKey,
+    DateTime monday,
   ) {
     final emptyCount = menuState.emptySlotCount;
     final showCard = !_cardDismissed && emptyCount > 0;
@@ -202,15 +326,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onLeaveEmpty: () => setState(() => _cardDismissed = true),
           ),
 
-        // ── Grille semaine ──
+        // ── Grille semaine — toujours interactive ──
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: WeekGrid(
               slots: menuState.slots,
               recipesMap: recipesMap,
-              isPostGeneration: !menuState.isValidated,
-              isReadOnly: menuState.isValidated,
+              monday: monday,
+              isPostGeneration: true,
               lockedSlotIndices: menuState.lockedSlotIndices,
               highlightEmptySlots: _highlightEmptySlots,
               onSlotTap: (slotIndex) =>
@@ -226,22 +350,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
         ),
-
-        // ── Bouton Valider ──
-        if (!menuState.isValidated)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                ),
-                onPressed: () => _validateMenu(menuState, weekKey),
-                child: const Text('Valider le menu'),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -281,8 +389,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       builder: (_) => GenerationFiltersSheet(
         initialFilters: ref.read(filtersProvider),
         onApply: (newFilters) {
-          // Mettre à jour le provider puis générer avec les nouveaux filtres
-          // directement (sans re-lire le provider) pour éviter toute ambiguïté
           ref.read(filtersProvider.notifier).update(newFilters);
           setState(() {
             _cardDismissed = false;
@@ -300,29 +406,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Map<String, Recipe> recipesMap,
   ) {
     final slot = menuState.slots[slotIndex];
-    if (slot == null) return; // créneau vide → ouvrir picker (futur)
+    if (slot == null) {
+      _onRefreshSlot(slotIndex, recipesMap.values.toList());
+      return;
+    }
 
     final recipe = recipesMap[slot.recipeId];
     if (recipe == null && !slot.isSpecialEvent) return;
 
+    final isLocked = menuState.lockedSlotIndices.contains(slotIndex);
+
     showModalBottomSheet<void>(
       context: context,
       builder: (_) => MealSlotBottomSheet(
-        recipeName: slot.isSpecialEvent ? 'Événement spécial' : recipe!.name,
+        recipeName: slot.isSpecialEvent
+            ? (slot.eventLabel ?? 'Événement spécial')
+            : recipe!.name,
+        isLocked: isLocked,
         onViewRecipe: slot.isSpecialEvent
             ? null
             : () => context.push('/recipes/${slot.recipeId}'),
+        onToggleLock: () => ref
+            .read(generateMenuProvider.notifier)
+            .toggleLock(slotIndex),
         onReplace: () => _onRefreshSlot(
           slotIndex,
           recipesMap.values.toList(),
         ),
-        onSpecialEvent: () => ref
-            .read(generateMenuProvider.notifier)
-            .setSpecialEvent(slotIndex),
+        onSpecialEvent: () => _showEventLabelDialog(slotIndex),
         onDelete: () =>
             ref.read(generateMenuProvider.notifier).clearSlot(slotIndex),
       ),
     );
+  }
+
+  /// Tap sur un slot en mode read-only (menu validé) : juste voir la recette.
+  void _onReadOnlySlotTap(
+    int slotIndex,
+    GeneratedMenuState menuState,
+    Map<String, Recipe> recipesMap,
+  ) {
+    final slot = menuState.slots[slotIndex];
+    if (slot == null || slot.isSpecialEvent) return;
+
+    final recipe = recipesMap[slot.recipeId];
+    if (recipe == null) return;
+
+    context.push('/recipes/${slot.recipeId}');
   }
 
   void _onRefreshSlot(int slotIndex, List<dynamic> recipes) {
@@ -336,6 +466,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             .replaceSlot(slotIndex, recipeId),
       ),
     );
+  }
+
+  String _formatWeekTitle(DateTime monday, DateTime sunday) {
+    final mDay = monday.day;
+    final sDay = sunday.day;
+    final mMonth = DateFormat.MMMM('fr_FR').format(monday);
+    final sMonth = DateFormat.MMMM('fr_FR').format(sunday);
+    if (monday.month == sunday.month) {
+      return 'Semaine du $mDay au $sDay $mMonth';
+    }
+    return 'Semaine du $mDay $mMonth au $sDay $sMonth';
+  }
+
+  Future<void> _showEventLabelDialog(int slotIndex) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nom de l\'événement'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'ex: Anniversaire, Restaurant…',
+          ),
+          onSubmitted: (_) =>
+              Navigator.of(ctx).pop(controller.text.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || result == null) return;
+    ref.read(generateMenuProvider.notifier).setSpecialEvent(
+          slotIndex,
+          label: result.isEmpty ? null : result,
+        );
   }
 
   Future<void> _validateMenu(
@@ -363,9 +540,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 // Widget banner — débloquage de la génération (Story 6.2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Banner informatif affiché quand l'utilisateur a moins de 3 recettes.
-///
-/// Disparaît automatiquement dès que [canGenerateProvider] passe à `true`.
 class _GenerationUnlockBanner extends StatelessWidget {
   const _GenerationUnlockBanner({required this.recipeCount});
 
@@ -375,7 +549,7 @@ class _GenerationUnlockBanner extends StatelessWidget {
   String get _message {
     final remaining = _target - recipeCount;
     if (recipeCount == 0) {
-      return 'Commence par ajouter 3 recettes pour générer un menu';
+      return 'Commence par ajouter $_target recettes pour générer un menu';
     }
     if (remaining == 1) {
       return 'Plus qu\'1 recette avant de pouvoir générer !';
@@ -389,7 +563,7 @@ class _GenerationUnlockBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: const Color(0xFFFFF3E0), // orange très clair
+      color: const Color(0xFFFFF3E0),
       child: Row(
         children: [
           const Icon(

@@ -1,8 +1,8 @@
-import 'dart:io';
-
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/core/utils/time_utils.dart';
+import 'package:appli_recette/core/widgets/recipe_photo_widget.dart';
 import 'package:appli_recette/features/household/household.dart';
+import 'package:appli_recette/features/recipes/data/datasources/recipe_steps_local_datasource.dart';
 import 'package:appli_recette/features/recipes/presentation/providers/recipes_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +19,7 @@ class RecipeDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final recipeAsync = ref.watch(recipeByIdProvider(recipeId));
     final ingredientsAsync = ref.watch(ingredientsForRecipeProvider(recipeId));
+    final stepsAsync = ref.watch(stepsForRecipeProvider(recipeId));
     final notifier = ref.read(recipesNotifierProvider.notifier);
 
     return recipeAsync.when(
@@ -93,19 +94,10 @@ class RecipeDetailScreen extends ConsumerWidget {
                 ],
                 flexibleSpace: recipe.photoPath != null
                     ? FlexibleSpaceBar(
-                        background: Image.file(
-                          File(recipe.photoPath!),
-                          fit: BoxFit.cover,
-                          errorBuilder: (ctx, err, stack) => const ColoredBox(
-                            color: AppColors.surfaceVariant,
-                            child: Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                color: AppColors.textSecondary,
-                                size: 48,
-                              ),
-                            ),
-                          ),
+                        background: RecipePhotoWidget(
+                          photoUrl: recipe.photoPath,
+                          fit: BoxFit.contain,
+                          fallbackIcon: Icons.broken_image_outlined,
                         ),
                       )
                     : null,
@@ -266,6 +258,97 @@ class RecipeDetailScreen extends ConsumerWidget {
                         },
                       ),
 
+                      // ─── Étapes de préparation ─────────────────────────
+                      stepsAsync.when(
+                        loading: () => const CircularProgressIndicator(),
+                        error: (err, stack) => const SizedBox.shrink(),
+                        data: (steps) {
+                          if (steps.isEmpty) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _SectionTitle(
+                                'Préparation (${steps.length} étape${steps.length > 1 ? 's' : ''})',
+                              ),
+                              const SizedBox(height: 12),
+                              ...steps.map((step) {
+                                final photos = step.photoPaths;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Numéro d'étape
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.primary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          '${step.stepNumber}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            if (step.instruction != null &&
+                                                step.instruction!.isNotEmpty)
+                                              Text(
+                                                step.instruction!,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium,
+                                              ),
+                                            if (photos.isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              SizedBox(
+                                                height: 100,
+                                                child: ListView.separated(
+                                                  scrollDirection:
+                                                      Axis.horizontal,
+                                                  itemCount: photos.length,
+                                                  separatorBuilder: (_, __) =>
+                                                      const SizedBox(
+                                                          width: 8),
+                                                  itemBuilder: (_, i) {
+                                                    return RecipePhotoWidget(
+                                                      photoUrl: photos[i],
+                                                      height: 100,
+                                                      borderRadius:
+                                                          BorderRadius
+                                                              .circular(8),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                              const SizedBox(height: 8),
+                            ],
+                          );
+                        },
+                      ),
+
                       // ─── Notes ─────────────────────────────────────────
                       if (recipe.notes != null &&
                           recipe.notes!.isNotEmpty) ...[
@@ -376,11 +459,16 @@ class RecipeDetailScreen extends ConsumerWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      // Supprimer la photo du disque si elle existe
+      // Supprimer la photo de Supabase Storage si elle existe
       final recipe = ref.read(recipeByIdProvider(recipeId)).value;
-      if (recipe?.photoPath != null) {
-        final imageService = ref.read(imageServiceProvider);
-        await imageService.deletePhoto(recipe!.photoPath!);
+      if (recipe?.photoPath != null &&
+          recipe!.photoPath!.startsWith('http')) {
+        try {
+          final storageService = ref.read(supabaseStorageServiceProvider);
+          await storageService.deleteByPublicUrl(recipe.photoPath!);
+        } on Exception catch (_) {
+          // Ignorer les erreurs de suppression Storage — la recette sera quand même supprimée
+        }
       }
       await ref.read(recipesNotifierProvider.notifier).deleteRecipe(recipeId);
       if (context.mounted) {
@@ -394,6 +482,7 @@ class RecipeDetailScreen extends ConsumerWidget {
       'breakfast' => 'Petit-déjeuner',
       'lunch' => 'Déjeuner',
       'dinner' => 'Dîner',
+      'both' => 'Déjeuner + Dîner',
       'snack' => 'Goûter',
       'dessert' => 'Dessert',
       _ => mealType,
