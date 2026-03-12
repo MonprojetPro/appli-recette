@@ -72,7 +72,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 children: [
                   // Logo
                   Image.asset(
-                    'assets/icon/logo_menuzen.png',
+                    'assets/icon/logo_menufacile.png',
                     height: 40,
                   ),
                   const SizedBox(height: 20),

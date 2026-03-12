@@ -1,5 +1,5 @@
 name: appli_recette
-description: A Very Good Project created by Very Good CLI.
+description: Application de gestion de recettes et generation intelligente de menus hebdomadaires pour un foyer.
 version: 1.0.0+1
 publish_to: none
 

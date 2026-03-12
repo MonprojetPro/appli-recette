@@ -30,6 +30,12 @@ class OnboardingNotifier extends AsyncNotifier<bool> {
       return true;
     });
   }
+
+  /// Réinitialise le flag onboarding (nouveau compte / déconnexion).
+  Future<void> reset() async {
+    await ref.read(onboardingServiceProvider).reset();
+    state = const AsyncValue.data(false);
+  }
 }
 
 final onboardingNotifierProvider =

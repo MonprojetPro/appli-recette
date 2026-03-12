@@ -1,6 +1,6 @@
 {
-    "name": "MenuZen",
-    "short_name": "MenuZen",
+    "name": "MenuFacile",
+    "short_name": "MenuFacile",
     "description": "Gérez vos recettes et générez vos menus hebdomadaires",
     "start_url": "/",
     "display": "standalone",

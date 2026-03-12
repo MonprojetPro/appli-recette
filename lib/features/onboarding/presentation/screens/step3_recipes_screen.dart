@@ -135,15 +135,16 @@ class Step3RecipesScreen extends ConsumerWidget {
                 child: SizedBox(
                   height: 48,
                   child: FilledButton(
-                    onPressed: count >= 1 ? onComplete : null,
+                    onPressed: onComplete,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      disabledBackgroundColor: AppColors.disabled,
                     ),
                     child: Text(
                       count >= kMinRecipesForGeneration
                           ? 'Terminer et générer !'
-                          : 'Terminer',
+                          : count > 0
+                              ? 'Terminer'
+                              : 'Passer pour l\'instant',
                     ),
                   ),
                 ),

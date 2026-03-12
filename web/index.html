@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -24,18 +11,63 @@
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="MenuZen">
+  <meta name="apple-mobile-web-app-title" content="MenuFacile">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>MenuZen</title>
+  <title>MenuFacile</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    @keyframes mz-spin { to { transform: rotate(360deg); } }
+    #mz-loading {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background-color: #FDF6EF; font-family: sans-serif; z-index: 999999;
+      pointer-events: none;
+    }
+    #mz-loading .mz-spinner {
+      width: 40px; height: 40px; border: 4px solid #f3d5c4;
+      border-top: 4px solid #E8794A; border-radius: 50%;
+      animation: mz-spin 0.8s linear infinite;
+    }
+    #mz-loading p { margin-top: 16px; font-size: 14px; color: #7a7a7a; }
+  </style>
+  <script>
+    (function() {
+      var d = document.createElement('div');
+      d.id = 'mz-loading';
+      d.innerHTML = '<div class="mz-spinner"></div><p id="mz-msg">Chargement de MenuFacile...</p>';
+      document.documentElement.appendChild(d);
+
+      // Après 5s, rassurer l'utilisateur
+      setTimeout(function() {
+        var msg = document.getElementById('mz-msg');
+        if (msg) msg.textContent = 'Première visite ? Le chargement peut prendre quelques secondes...';
+      }, 5000);
+
+      // Vérifier toutes les 300ms si Flutter a peint un canvas,
+      // puis retirer le spinner avec un fade-out.
+      var check = setInterval(function() {
+        var pane = document.querySelector('flt-glass-pane');
+        if (pane && pane.shadowRoot) {
+          var canvas = pane.shadowRoot.querySelector('canvas');
+          if (canvas && canvas.width > 0) {
+            clearInterval(check);
+            setTimeout(function() {
+              d.style.transition = 'opacity 0.3s ease';
+              d.style.opacity = '0';
+              setTimeout(function() { d.remove(); }, 300);
+            }, 200);
+          }
+        }
+      }, 300);
+    })();
+  </script>
 </head>
 <body>
-  <script>
-    {{flutter_bootstrap_js}}
-  </script>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

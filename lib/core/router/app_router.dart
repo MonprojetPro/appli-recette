@@ -29,7 +29,6 @@ abstract class AppRoutes {
   static const recipes = '/recipes';
   static const household = '/household';
   static const planning = '/planning';
-  static const newRecipe = '/recipes/new';
   static const createFullRecipe = '/recipes/create-full';
   static const recipeDetail = '/recipes/:id';
   static const recipeEdit = '/recipes/:id/edit';
@@ -75,7 +74,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ─── Routes auth (hors shell) ─────────────────────────────────────────
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) => LoginScreen(
+          existingAccount:
+              state.uri.queryParameters['existing'] == 'true',
+        ),
       ),
       GoRoute(
         path: AppRoutes.signup,
@@ -101,18 +103,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // ─── Deep-link invitation (Story 8.3) ────────────────────────────────
-      // Sauvegarde le code en local puis redirige vers /signup.
-      // Après login, le router détectera le code pending et auto-join.
+      // Le code est sauvegardé par le redirect global (app_router_notifier).
+      // Cette route ne sera jamais affichée (toujours redirigée).
       GoRoute(
         path: AppRoutes.join,
-        redirect: (context, state) async {
-          final code = state.uri.queryParameters['code'];
-          if (code != null && code.isNotEmpty) {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('pending_join_code', code);
-          }
-          return AppRoutes.signup;
-        },
+        builder: (context, state) => const SizedBox.shrink(),
       ),
 
       // ─── Réglages (Story 8.3) ────────────────────────────────────────────
@@ -170,10 +165,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ─── Routes modales hors shell ─────────────────────────────────────────
 
-      GoRoute(
-        path: AppRoutes.newRecipe,
-        builder: (context, state) => const CreateFullRecipePage(),
-      ),
       GoRoute(
         path: AppRoutes.createFullRecipe,
         builder: (context, state) => const CreateFullRecipePage(),
@@ -302,7 +293,7 @@ class AppShell extends ConsumerWidget {
         );
       case 1: // Recettes — Nouvelle recette
         return FloatingActionButton(
-          onPressed: () => context.push(AppRoutes.newRecipe),
+          onPressed: () => context.push(AppRoutes.createFullRecipe),
           tooltip: 'Nouvelle recette',
           child: const Icon(Icons.add),
         );

@@ -7,27 +7,34 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Quand l'utilisateur clique sur le lien de confirmation, Supabase
 /// redirige vers l'app avec un `#access_token=...` dans l'URL.
 /// Cela crée une session temporaire qui n'est pas fiable sur Flutter web
-/// (WASM/IndexedDB). On détecte ce cas, on déconnecte la session
-/// temporaire, et on pose un flag pour que l'écran de login affiche
-/// "Email confirmé, connectez-vous".
+/// (WASM/IndexedDB). On détecte ce cas AVANT Supabase.initialize(),
+/// puis on sign out APRÈS pour forcer un login propre.
 class EmailConfirmationHandler {
   static const _kEmailConfirmed = 'email_just_confirmed';
 
-  /// À appeler après [Supabase.initialize()].
+  /// Détecte si l'URL contient un fragment de confirmation email.
   ///
-  /// Si l'URL contient un fragment `access_token` (confirmation email),
-  /// on sign out la session temporaire et on pose le flag.
-  static Future<void> handleIfNeeded() async {
+  /// **Doit être appelé AVANT [Supabase.initialize()]** car l'init
+  /// consomme le fragment URL.
+  static bool _hasConfirmationFragment = false;
+
+  static Future<void> detectBeforeInit() async {
     if (!kIsWeb) return;
 
-    // Vérifier si l'URL contient un fragment de confirmation
-    final uri = Uri.base;
-    final fragment = uri.fragment;
-    if (fragment.isEmpty || !fragment.contains('access_token')) return;
+    final fragment = Uri.base.fragment;
+    if (fragment.isNotEmpty && fragment.contains('access_token')) {
+      _hasConfirmationFragment = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kEmailConfirmed, true);
+    }
+  }
 
-    // C'est un retour de confirmation email → sign out la session temp
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kEmailConfirmed, true);
+  /// Sign out la session temporaire créée par le fragment.
+  ///
+  /// **Doit être appelé APRÈS [Supabase.initialize()]**.
+  static Future<void> signOutIfNeeded() async {
+    if (!_hasConfirmationFragment) return;
+    _hasConfirmationFragment = false;
     await Supabase.instance.client.auth.signOut();
   }
 

@@ -60,6 +60,18 @@ class AppRouterNotifier extends ChangeNotifier {
     final isAuthenticated = session != null;
     final isPublic = _publicPrefixes.any((p) => loc.startsWith(p));
 
+    // /join — sauvegarder le code et rediriger vers /signup
+    if (loc.startsWith('/join')) {
+      final code = state.uri.queryParameters['code'];
+      if (code != null && code.isNotEmpty) {
+        // Fire-and-forget : sauvegarde le code pour auto-join après login
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setString('pending_join_code', code);
+        });
+      }
+      return isAuthenticated ? '/' : '/signup';
+    }
+
     // Non authentifié : autoriser routes publiques, bloquer le reste
     if (!isAuthenticated) {
       return isPublic ? null : '/login';

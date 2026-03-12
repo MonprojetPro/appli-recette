@@ -1,4 +1,5 @@
 import 'package:appli_recette/core/auth/auth_providers.dart';
+import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/household/household_providers.dart';
@@ -70,7 +71,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Image.asset(
-          'assets/icon/logo_menuzen.png',
+          'assets/icon/logo_menufacile.png',
           height: 32,
         ),
         actions: [
@@ -128,10 +129,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           // ── Sélecteur de semaine ──
           const WeekSelector(),
-
-          // ── Banner débloquage (Story 6.2) ──
-          if (isCurrentWeek && !canGenerate)
-            _GenerationUnlockBanner(recipeCount: recipeCount),
 
           // ── Contenu principal ──
           Expanded(
@@ -205,7 +202,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           weekKey,
           recipesMap,
           dateRange.monday,
-          showGenerateHint: true,
+          showGenerateHint: canGenerate,
         );
       },
     );
@@ -264,12 +261,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       for (final r in recipes) r.id: r,
     };
     final dateRange = weekKeyToDateRange(weekKey);
+    final canGen = ref.watch(canGenerateProvider);
     return _buildValidatedMenuOrEmpty(
       context,
       weekKey,
       recipesMap,
       dateRange.monday,
-      showGenerateHint: true,
+      showGenerateHint: canGen,
     );
   }
 
@@ -277,6 +275,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     BuildContext context, {
     bool showGenerateHint = true,
   }) {
+    if (!showGenerateHint) {
+      // Pas assez de recettes — afficher l'état unlock centré
+      final count = ref.watch(recipeCountProvider);
+      return _RecipeUnlockState(
+        recipeCount: count,
+        onAddRecipe: () => context.go('/recipes'),
+      );
+    }
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -287,38 +294,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
             Text(
-              showGenerateHint
-                  ? 'Prêt à planifier tes repas ?'
-                  : 'Aucun menu pour cette semaine',
+              'Prêt à planifier tes repas ?',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Colors.grey.shade700,
                     fontWeight: FontWeight.w600,
                   ),
               textAlign: TextAlign.center,
             ),
-            if (showGenerateHint) ...[
-              const SizedBox(height: 8),
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey.shade500,
-                      ),
-                  children: [
-                    const TextSpan(text: 'Appuie sur '),
-                    WidgetSpan(
-                      alignment: PlaceholderAlignment.middle,
-                      child: Icon(
-                        Icons.auto_awesome,
-                        size: 18,
-                        color: AppColors.primary,
-                      ),
+            const SizedBox(height: 8),
+            RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey.shade500,
                     ),
-                    const TextSpan(text: ' en bas pour générer ton menu'),
-                  ],
-                ),
+                children: [
+                  const TextSpan(text: 'Appuie sur '),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Icon(
+                      Icons.auto_awesome,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const TextSpan(text: ' en bas pour générer ton menu'),
+                ],
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -548,6 +551,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final authService = ref.read(authServiceProvider);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('household_id');
+    await ref.read(onboardingNotifierProvider.notifier).reset();
     ref.invalidate(currentHouseholdIdProvider);
     await authService.signOut();
 
@@ -623,58 +627,130 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Widget banner — débloquage de la génération (Story 6.2)
+// État centré — débloquage de la génération (pas assez de recettes)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _GenerationUnlockBanner extends StatelessWidget {
-  const _GenerationUnlockBanner({required this.recipeCount});
+class _RecipeUnlockState extends StatelessWidget {
+  const _RecipeUnlockState({
+    required this.recipeCount,
+    required this.onAddRecipe,
+  });
 
   final int recipeCount;
+  final VoidCallback onAddRecipe;
   static const _target = kMinRecipesForGeneration;
-
-  String get _message {
-    final remaining = _target - recipeCount;
-    if (recipeCount == 0) {
-      return 'Commence par ajouter $_target recettes pour générer un menu';
-    }
-    if (remaining == 1) {
-      return 'Plus qu\'1 recette avant de pouvoir générer !';
-    }
-    return 'Ajoute encore $remaining recettes pour générer un menu';
-  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: const Color(0xFFFFF3E0),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.info_outline,
-            color: AppColors.primary,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _message,
-              style: theme.textTheme.bodySmall?.copyWith(
+    final remaining = _target - recipeCount;
+    final progress = (recipeCount / _target).clamp(0.0, 1.0);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icône
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.menu_book_outlined,
+                size: 40,
                 color: AppColors.primary,
-                fontWeight: FontWeight.w600,
               ),
             ),
-          ),
-          Text(
-            '$recipeCount/$_target',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 20),
+
+            // Titre
+            Text(
+              recipeCount == 0
+                  ? 'Commence par tes recettes !'
+                  : 'Encore $remaining recette${remaining > 1 ? 's' : ''} à ajouter',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+
+            // Sous-titre
+            Text(
+              'Il faut au moins $_target recettes pour\ngénérer un menu hebdomadaire.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // Barre de progression
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primaryLight.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Progression',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        '$recipeCount / $_target recettes',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: AppColors.divider,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.primary,
+                    ),
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Bouton
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onAddRecipe,
+                icon: const Icon(Icons.add),
+                label: const Text('Ajouter des recettes'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

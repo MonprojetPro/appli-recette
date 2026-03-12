@@ -19,17 +19,17 @@ class InvitationService {
   Future<void> shareInvitation(String code) async {
     final link = generateInvitationLink(code);
     await Share.share(
-      '🍽️ Je t\'invite sur MenuZen !\n'
+      '🍽️ Je t\'invite sur MenuFacile !\n'
       '\n'
-      'MenuZen planifie nos repas de la semaine en un clic.\n'
+      'MenuFacile planifie nos repas de la semaine en un clic.\n'
       'Rejoins mon foyer pour qu\'on organise nos menus ensemble :\n'
       '\n'
       '👉 $link\n'
       '\n'
       '📋 Ton code d\'accès : $code\n'
       '\n'
-      'A bientot sur MenuZen !',
-      subject: 'Rejoins mon foyer sur MenuZen !',
+      'A bientôt sur MenuFacile !',
+      subject: 'Rejoins mon foyer sur MenuFacile !',
     );
   }
 }

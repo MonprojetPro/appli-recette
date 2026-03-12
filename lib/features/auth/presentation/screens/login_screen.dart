@@ -12,7 +12,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Gère : connexion (AC-2), navigation vers signup (AC-3),
 /// navigation vers mot de passe oublié (AC-5), messages d'erreur humains (AC-7).
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({this.existingAccount = false, super.key});
+
+  final bool existingAccount;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -111,7 +113,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   FractionallySizedBox(
                     widthFactor: 0.8,
                     child: Image.asset(
-                      'assets/icon/logo_menuzen.png',
+                      'assets/icon/logo_menufacile.png',
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -124,6 +126,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
+
+                  // Bandeau compte existant
+                  if (widget.existingAccount) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              color: AppColors.primary, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Un compte existe déjà avec cette adresse. '
+                              'Connectez-vous avec votre mot de passe.',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: AppColors.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Bandeau email confirmé
                   if (_emailJustConfirmed) ...[

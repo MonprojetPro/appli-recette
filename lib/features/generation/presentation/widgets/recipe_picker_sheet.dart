@@ -1,4 +1,5 @@
 import 'package:appli_recette/core/database/app_database.dart';
+import 'package:appli_recette/core/utils/time_utils.dart';
 import 'package:flutter/material.dart';
 
 /// Bottom sheet permettant de choisir une recette pour remplacer un créneau.
@@ -122,7 +123,7 @@ class _RecipePickerSheetState extends State<RecipePickerSheet> {
                         title: Text(recipe.name),
                         subtitle: Text(_mealTypeLabel(recipe.mealType)),
                         trailing: Text(
-                          _formatTime(recipe.prepTimeMinutes),
+                          formatTime(recipe.prepTimeMinutes),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         onTap: () {
@@ -151,11 +152,4 @@ class _RecipePickerSheetState extends State<RecipePickerSheet> {
         _ => mealType,
       };
 
-  String _formatTime(int minutes) {
-    if (minutes == 0) return '';
-    if (minutes < 60) return '${minutes}min';
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return m == 0 ? '${h}h' : '${h}h${m.toString().padLeft(2, '0')}';
-  }
 }

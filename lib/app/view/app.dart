@@ -45,7 +45,7 @@ class _AppContent extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'MenuZen',
+      title: 'MenuFacile',
       theme: AppTheme.light,
       routerConfig: router,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

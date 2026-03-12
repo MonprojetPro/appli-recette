@@ -58,10 +58,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     try {
       final service = ref.read(authServiceProvider);
-      await service.signUp(
+      final response = await service.signUp(
         _emailController.text.trim(),
         _passwordController.text,
       );
+
+      // Supabase retourne 200 avec identities vide pour un repeated signup
+      final identities = response.user?.identities;
+      if (identities == null || identities.isEmpty) {
+        if (mounted) {
+          context.go('/login?existing=true');
+        }
+        return;
+      }
+
       if (mounted) {
         context.pushReplacement(
           '/verify-email',

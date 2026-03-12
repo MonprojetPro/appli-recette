@@ -32,10 +32,10 @@ class AuthService {
     );
   }
 
-  /// URL de base web, injectée via dart-define ou défaut menuzen.
+  /// URL de base web, injectée via dart-define ou défaut menufacile.
   static const _webBaseUrl = String.fromEnvironment(
     'WEB_BASE_URL',
-    defaultValue: 'https://menuzen.vercel.app',
+    defaultValue: 'https://menufacile.app',
   );
 
   /// Envoie un email de réinitialisation du mot de passe.
