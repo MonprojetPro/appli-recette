@@ -9,23 +9,26 @@ class RecipeLocalDatasource {
 
   final AppDatabase _db;
 
-  /// Flux de toutes les recettes triées par date de création DESC.
-  Stream<List<Recipe>> watchAll() {
+  /// Flux de toutes les recettes du foyer triées par date de création DESC.
+  Stream<List<Recipe>> watchAll(String householdId) {
     return (_db.select(_db.recipes)
+          ..where((t) => t.householdId.equals(householdId))
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
         .watch();
   }
 
-  /// Flux de recettes filtrées par recherche sur le nom.
+  /// Flux de recettes du foyer filtrées par recherche sur le nom.
   /// Les caractères LIKE spéciaux (% et _) sont supprimés du query.
-  Stream<List<Recipe>> watchBySearch(String query) {
+  Stream<List<Recipe>> watchBySearch(String query, String householdId) {
     // drift v2 ne supporte pas le paramètre `escape` sur like() —
     // on supprime les caractères LIKE spéciaux pour éviter les faux-positifs.
     final safeQuery =
         query.replaceAll('%', '').replaceAll('_', '').replaceAll(r'\', '');
     return (_db.select(_db.recipes)
           ..where(
-            (t) => t.name.like('%$safeQuery%'),
+            (t) =>
+                t.householdId.equals(householdId) &
+                t.name.like('%$safeQuery%'),
           )
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
         .watch();

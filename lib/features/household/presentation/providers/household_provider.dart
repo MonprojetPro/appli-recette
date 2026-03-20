@@ -1,5 +1,6 @@
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
+import 'package:appli_recette/core/household/household_providers.dart';
 import 'package:appli_recette/core/sync/sync_provider.dart';
 import 'package:appli_recette/features/household/data/datasources/meal_rating_datasource.dart';
 import 'package:appli_recette/features/household/data/datasources/member_local_datasource.dart';
@@ -37,9 +38,11 @@ final householdRepositoryProvider = Provider<HouseholdRepository>((ref) {
 // Stream providers (lecture)
 // ---------------------------------------------------------------------------
 
-/// Stream de tous les membres du foyer.
+/// Stream de tous les membres du foyer courant.
 final membersStreamProvider = StreamProvider<List<Member>>((ref) {
-  return ref.watch(householdRepositoryProvider).watchAll();
+  final householdId = ref.watch(currentHouseholdIdProvider).value;
+  if (householdId == null) return const Stream.empty();
+  return ref.watch(householdRepositoryProvider).watchAll(householdId);
 });
 
 /// Stream des notations pour une recette donnée.

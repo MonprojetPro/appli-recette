@@ -37,6 +37,10 @@ class AppRouterNotifier extends ChangeNotifier {
   final Ref _ref;
   bool _autoJoinInProgress = false;
 
+  /// Stockage en mémoire du code d'invitation (évite la race condition
+  /// entre la sauvegarde async SharedPreferences et _tryAutoJoin).
+  String? _pendingJoinCode;
+
   /// Préfixes de routes publiques (accessibles sans authentification).
   static const _publicPrefixes = [
     '/login',
@@ -64,7 +68,10 @@ class AppRouterNotifier extends ChangeNotifier {
     if (loc.startsWith('/join')) {
       final code = state.uri.queryParameters['code'];
       if (code != null && code.isNotEmpty) {
-        // Fire-and-forget : sauvegarde le code pour auto-join après login
+        // Stockage synchrone en mémoire : élimine la race condition
+        // entre la sauvegarde async SharedPreferences et _tryAutoJoin().
+        _pendingJoinCode = code;
+        // Aussi sauvegarder dans SharedPreferences pour persistance (app restart)
         SharedPreferences.getInstance().then((prefs) {
           prefs.setString('pending_join_code', code);
         });
@@ -106,6 +113,7 @@ class AppRouterNotifier extends ChangeNotifier {
       // Vérifier s'il y a un code d'invitation pending (deep-link /join)
       if (!_autoJoinInProgress) {
         _autoJoinInProgress = true;
+        _ref.read(autoJoinInProgressProvider.notifier).setInProgress(true);
         _tryAutoJoin();
       }
       return '/household-setup';
@@ -118,27 +126,34 @@ class AppRouterNotifier extends ChangeNotifier {
   ///
   /// Lancé en fire-and-forget : si le code est valide, les providers
   /// sont invalidés et le router se réévalue automatiquement vers '/'.
+  /// Utilise d'abord le code en mémoire (_pendingJoinCode) pour éviter
+  /// la race condition avec la sauvegarde async SharedPreferences.
   Future<void> _tryAutoJoin() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final code = prefs.getString('pending_join_code');
-      if (code == null || code.isEmpty) return;
+      // Priorité au code en mémoire (pas de race condition)
+      final code = _pendingJoinCode ?? prefs.getString('pending_join_code');
+      _pendingJoinCode = null; // Consommé
 
-      // Consommer le code immédiatement (éviter boucle)
-      await prefs.remove('pending_join_code');
+      if (code == null || code.isEmpty) return;
 
       final service = _ref.read(householdServiceProvider);
       await service.joinHousehold(code);
 
-      // Marquer l'onboarding comme complété
+      // Consommer le code stocké après un join réussi
+      await prefs.remove('pending_join_code');
+
+      // Rejoindre via lien → onboarding skippé, aller directement à l'accueil
       await _ref.read(onboardingNotifierProvider.notifier).complete();
 
-      // Invalider le provider → le router se réévalue
+      // Invalider le provider → le router se réévalue vers '/'
       _ref.invalidate(currentHouseholdIdProvider);
-    } catch (_) {
-      // Echec silencieux — l'utilisateur reste sur /household-setup
+    } catch (e) {
+      // Echec — l'utilisateur reste sur /household-setup pour saisir manuellement
+      debugPrint('[AutoJoin] échec: $e');
     } finally {
       _autoJoinInProgress = false;
+      _ref.read(autoJoinInProgressProvider.notifier).setInProgress(false);
     }
   }
 

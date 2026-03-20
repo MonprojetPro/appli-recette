@@ -90,8 +90,7 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
       final service = ref.read(householdServiceProvider);
       await service.joinHousehold(_codeValue);
       if (mounted) {
-        // Marquer l'onboarding comme complété — le créateur du foyer
-        // a déjà configuré les membres et préférences.
+        // Rejoindre un foyer existant → onboarding skippé, aller directement à l'accueil
         await ref.read(onboardingNotifierProvider.notifier).complete();
         ref.invalidate(currentHouseholdIdProvider);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -120,53 +119,94 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final autoJoining = ref.watch(autoJoinInProgressProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 32),
-              Text(
-                'Configurer votre foyer',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+          child: autoJoining
+              ? _AutoJoinLoadingView(theme: theme)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 32),
+                    Text(
+                      'Configurer votre foyer',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    Expanded(
+                      child: switch (_mode) {
+                        _SetupMode.selection => _SelectionView(
+                            onCreateTap: () =>
+                                setState(() => _mode = _SetupMode.create),
+                            onJoinTap: () =>
+                                setState(() => _mode = _SetupMode.join),
+                          ),
+                        _SetupMode.create => _CreateView(
+                            formKey: _createFormKey,
+                            nameController: _nameController,
+                            loading: _loading,
+                            onSubmit: _createHousehold,
+                            onBack: () =>
+                                setState(() => _mode = _SetupMode.selection),
+                          ),
+                        _SetupMode.join => _JoinView(
+                            formKey: _joinFormKey,
+                            codeController: _codeController,
+                            codeValue: _codeValue,
+                            loading: _loading,
+                            onSubmit: _joinHousehold,
+                            onBack: () =>
+                                setState(() => _mode = _SetupMode.selection),
+                          ),
+                      },
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              Expanded(
-                child: switch (_mode) {
-                  _SetupMode.selection => _SelectionView(
-                      onCreateTap: () =>
-                          setState(() => _mode = _SetupMode.create),
-                      onJoinTap: () =>
-                          setState(() => _mode = _SetupMode.join),
-                    ),
-                  _SetupMode.create => _CreateView(
-                      formKey: _createFormKey,
-                      nameController: _nameController,
-                      loading: _loading,
-                      onSubmit: _createHousehold,
-                      onBack: () => setState(() => _mode = _SetupMode.selection),
-                    ),
-                  _SetupMode.join => _JoinView(
-                      formKey: _joinFormKey,
-                      codeController: _codeController,
-                      codeValue: _codeValue,
-                      loading: _loading,
-                      onSubmit: _joinHousehold,
-                      onBack: () => setState(() => _mode = _SetupMode.selection),
-                    ),
-                },
-              ),
-            ],
-          ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Loading auto-join ─────────────────────────────────────────────────────────
+
+class _AutoJoinLoadingView extends StatelessWidget {
+  const _AutoJoinLoadingView({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 24),
+          Text(
+            'Connexion au foyer en cours…',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Synchronisation des données du foyer',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

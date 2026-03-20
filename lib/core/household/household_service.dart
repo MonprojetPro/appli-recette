@@ -41,6 +41,8 @@ class HouseholdService {
       _clientOverride ?? Supabase.instance.client;
 
   static const _keyHouseholdId = 'household_id';
+  static const _keyAuthUserId = 'auth_user_id';
+  static const _keyHouseholdCode = 'household_code';
 
   /// Crée un nouveau foyer pour l'utilisateur courant.
   ///
@@ -77,8 +79,22 @@ class HouseholdService {
       'role': 'owner',
     });
 
+    // Enregistrer le device pour la RLS (get_my_household_id)
+    await _client.from('household_auth_devices').insert({
+      'household_id': householdId,
+      'auth_user_id': user.id,
+      'joined_at': DateTime.now().toUtc().toIso8601String(),
+    });
+
     await _persistHouseholdId(householdId);
     await linkLocalDataToHousehold(householdId);
+
+    // Stocker le code localement pour éviter un appel Supabase à chaque démarrage
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyHouseholdCode, code);
+
+    // Nouveau foyer créé → l'onboarding doit être refait pour ce foyer
+    await prefs.remove('onboarding_complete');
 
     return code;
   }
@@ -132,10 +148,19 @@ class HouseholdService {
     );
 
     await _persistHouseholdId(householdId);
+
+    // Stocker le code localement
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyHouseholdCode, code);
+
     await InitialSyncService(_db).syncFromSupabase(householdId);
   }
 
   /// Retourne le [household_id] stocké localement.
+  ///
+  /// Vérifie que les données locales appartiennent à l'utilisateur courant.
+  /// Si un autre utilisateur s'est connecté, les données stale sont purgées
+  /// et on repart d'une vérification Supabase propre.
   ///
   /// Si absent localement mais que l'utilisateur est déjà lié à un foyer
   /// dans Supabase (table household_auth_devices), récupère le household_id,
@@ -143,11 +168,28 @@ class HouseholdService {
   /// Cela évite de redemander "Rejoindre un foyer" à chaque nouveau device/navigateur.
   Future<String?> getCurrentHouseholdId() async {
     final prefs = await SharedPreferences.getInstance();
-    final local = prefs.getString(_keyHouseholdId);
-    if (local != null) return local;
-
-    // Pas de household_id local → vérifier dans Supabase
     final user = _client.auth.currentUser;
+    final local = prefs.getString(_keyHouseholdId);
+
+    if (local != null) {
+      // Vérifier que le household stocké appartient à l'utilisateur courant.
+      // Si un autre user AUTHENTIFIÉ s'est connecté (nouvelle session, même
+      // navigateur), les données localStorage du compte précédent seraient
+      // retournées à tort.
+      // IMPORTANT : si user == null (session Supabase en cours de restauration),
+      // on conserve les données locales — pas de purge sur une session indéfinie.
+      final storedUserId = prefs.getString(_keyAuthUserId);
+      if (user == null || storedUserId == null || storedUserId == user.id) {
+        // Session en cours de chargement, ou même utilisateur → OK
+        return local;
+      }
+      // Autre utilisateur authentifié → purger les données stale
+      await prefs.remove(_keyHouseholdId);
+      await prefs.remove(_keyAuthUserId);
+      await prefs.remove('onboarding_complete');
+    }
+
+    // Pas de household_id local valide → vérifier dans Supabase
     if (user == null) return null;
 
     try {
@@ -161,6 +203,24 @@ class HouseholdService {
 
       final householdId = row['household_id'] as String;
       await _persistHouseholdId(householdId);
+
+      // Récupérer et mettre en cache le code du foyer
+      try {
+        final householdRow = await _client
+            .from('households')
+            .select('code')
+            .eq('id', householdId)
+            .maybeSingle();
+        if (householdRow != null) {
+          await prefs.setString(
+              _keyHouseholdCode, householdRow['code'] as String);
+        }
+      } catch (_) {
+        // Le code sera récupéré au prochain accès si nécessaire
+      }
+
+      // Compte connu sur un nouvel appareil → pas besoin de refaire l'onboarding
+      await prefs.setBool('onboarding_complete', true);
       await InitialSyncService(_db).syncFromSupabase(householdId);
       return householdId;
     } catch (_) {
@@ -200,11 +260,28 @@ class HouseholdService {
         .write(MenuSlotsCompanion(householdId: Value(householdId)));
   }
 
+  /// Retourne le code du foyer depuis le cache local.
+  Future<String?> getHouseholdCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyHouseholdCode);
+  }
+
+  /// Met en cache le code du foyer localement.
+  Future<void> cacheHouseholdCode(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyHouseholdCode, code);
+  }
+
   // ── Private ────────────────────────────────────────────────────────────────
 
   Future<void> _persistHouseholdId(String householdId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyHouseholdId, householdId);
+    // Associer le household à l'utilisateur courant pour détecter les changements de compte.
+    final userId = _client.auth.currentUser?.id;
+    if (userId != null) {
+      await prefs.setString(_keyAuthUserId, userId);
+    }
   }
 
   Future<String> _generateUniqueCode() async {

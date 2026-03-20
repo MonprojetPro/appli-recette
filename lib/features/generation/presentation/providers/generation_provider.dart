@@ -1,5 +1,6 @@
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
+import 'package:appli_recette/core/household/household_providers.dart';
 import 'package:appli_recette/features/generation/domain/models/generation_filters.dart';
 import 'package:appli_recette/features/generation/domain/models/generation_input.dart';
 import 'package:appli_recette/features/generation/domain/models/meal_slot_result.dart';
@@ -21,9 +22,14 @@ final _mealRatingDatasourceProvider = Provider<MealRatingDatasource>((ref) {
   return MealRatingDatasource(db);
 });
 
-/// Stream de toutes les notations (tous membres, toutes recettes).
+/// Stream de toutes les notations du foyer courant.
 final allRatingsStreamProvider = StreamProvider<List<MealRating>>((ref) {
-  return ref.watch(_mealRatingDatasourceProvider).watchAll();
+  final householdId = ref.watch(currentHouseholdIdProvider).value;
+  if (householdId == null) return const Stream.empty();
+  final members = ref.watch(membersStreamProvider).value ?? [];
+  if (members.isEmpty) return const Stream.empty();
+  final memberIds = members.map((m) => m.id).toList();
+  return ref.watch(_mealRatingDatasourceProvider).watchForMembers(memberIds);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,22 +121,28 @@ class GenerateMenuNotifier
       // Collecter les données depuis les providers existants
       // Utiliser .first sur les streams directs pour éviter un blocage
       // lorsque les StreamProviders ne sont pas actifs (non watchés).
+      final householdId = ref.read(currentHouseholdIdProvider).value;
+      if (householdId == null) throw Exception('Pas de foyer configuré');
+
       final recipes = await ref
           .read(recipeRepositoryProvider)
-          .watchAll()
+          .watchAll(householdId)
           .first;
       final members = await ref
           .read(householdRepositoryProvider)
-          .watchAll()
+          .watchAll(householdId)
           .first;
       final presences = await ref
           .read(planningRepositoryProvider)
           .watchMergedPresences(weekKey)
           .first;
-      final ratings = await ref
-          .read(_mealRatingDatasourceProvider)
-          .watchAll()
-          .first;
+      final memberIds = members.map((m) => m.id).toList();
+      final ratings = memberIds.isEmpty
+          ? <MealRating>[]
+          : await ref
+              .read(_mealRatingDatasourceProvider)
+              .watchForMembers(memberIds)
+              .first;
       // Chaque semaine est indépendante — pas de déduplication inter-semaines
       final input = GenerationInput(
         weekKey: weekKey,

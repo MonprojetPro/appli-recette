@@ -57,4 +57,19 @@ class AppDatabase extends _$AppDatabase {
       },
     );
   }
+
+  /// Efface toutes les données locales (utilisé lors du sign out).
+  Future<void> clearAll() async {
+    await batch((b) {
+      b.deleteAll(menuSlots);
+      b.deleteAll(weeklyMenus);
+      b.deleteAll(mealRatings);
+      b.deleteAll(presenceSchedules);
+      b.deleteAll(syncQueue);
+      b.deleteAll(ingredients);
+      b.deleteAll(recipeSteps);
+      b.deleteAll(recipes);
+      b.deleteAll(members);
+    });
+  }
 }

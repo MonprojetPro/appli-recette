@@ -2,6 +2,8 @@ import 'package:appli_recette/core/auth/auth_providers.dart';
 import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
+import 'package:appli_recette/core/database/database_provider.dart';
+import 'package:appli_recette/core/sync/sync_provider.dart';
 import 'package:appli_recette/core/household/household_providers.dart';
 import 'package:appli_recette/core/household/invitation_service.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
@@ -549,9 +551,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (confirmed != true || !mounted) return;
 
     final authService = ref.read(authServiceProvider);
+    final db = ref.read(databaseProvider);
+    final processor = ref.read(syncQueueProcessorProvider);
     final prefs = await SharedPreferences.getInstance();
+    await processor.processQueue(); // flush sync avant de vider
+    await db.clearAll();
     await prefs.remove('household_id');
-    await ref.read(onboardingNotifierProvider.notifier).reset();
+    await prefs.remove('auth_user_id');
+    await prefs.remove('household_code');
     ref.invalidate(currentHouseholdIdProvider);
     await authService.signOut();
 

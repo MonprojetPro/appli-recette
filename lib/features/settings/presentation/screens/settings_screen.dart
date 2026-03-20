@@ -1,7 +1,10 @@
 import 'package:appli_recette/core/auth/auth_providers.dart';
+import 'package:appli_recette/core/database/database_provider.dart';
 import 'package:appli_recette/core/household/invitation_service.dart';
 import 'package:appli_recette/core/household/household_providers.dart';
+import 'package:appli_recette/core/sync/sync_provider.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
+import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:appli_recette/features/settings/presentation/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -183,8 +186,14 @@ class SettingsScreen extends ConsumerWidget {
     if (confirmed != true) return;
 
     final authService = ref.read(authServiceProvider);
+    final db = ref.read(databaseProvider);
+    final processor = ref.read(syncQueueProcessorProvider);
     final prefs = await SharedPreferences.getInstance();
+    await processor.processQueue(); // flush sync avant de vider
+    await db.clearAll();
     await prefs.remove('household_id');
+    await prefs.remove('auth_user_id');
+    await prefs.remove('household_code');
     ref.invalidate(currentHouseholdIdProvider);
     await authService.signOut();
 

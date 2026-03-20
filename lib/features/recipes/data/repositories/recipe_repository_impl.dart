@@ -25,11 +25,12 @@ class RecipeRepositoryImpl implements RecipeRepository {
   }
 
   @override
-  Stream<List<Recipe>> watchAll() => _datasource.watchAll();
+  Stream<List<Recipe>> watchAll(String householdId) =>
+      _datasource.watchAll(householdId);
 
   @override
-  Stream<List<Recipe>> watchBySearch(String query) =>
-      _datasource.watchBySearch(query);
+  Stream<List<Recipe>> watchBySearch(String query, String householdId) =>
+      _datasource.watchBySearch(query, householdId);
 
   @override
   Future<Recipe?> getById(String id) => _datasource.getById(id);
@@ -47,6 +48,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   }) async {
     final id = const Uuid().v4();
     final now = DateTime.now();
+    final householdId = await _getHouseholdId();
     final companion = RecipesCompanion.insert(
       id: id,
       name: name,
@@ -56,10 +58,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
       restTimeMinutes: Value(restTimeMinutes),
       createdAt: now,
       updatedAt: now,
+      householdId: Value(householdId),
     );
     final result = await _datasource.insert(companion);
-
-    final householdId = await _getHouseholdId();
     await _syncQueue.enqueue(
       SyncQueueCompanion.insert(
         id: const Uuid().v4(),

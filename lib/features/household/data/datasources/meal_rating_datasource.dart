@@ -12,6 +12,14 @@ class MealRatingDatasource {
     return _db.select(_db.mealRatings).watch();
   }
 
+  /// Stream des notations filtrées par liste de memberId (foyer courant).
+  Stream<List<MealRating>> watchForMembers(List<String> memberIds) {
+    if (memberIds.isEmpty) return Stream.value([]);
+    return (_db.select(_db.mealRatings)
+          ..where((t) => t.memberId.isIn(memberIds)))
+        .watch();
+  }
+
   /// Stream des notations pour une recette donnée.
   Stream<List<MealRating>> watchForRecipe(String recipeId) {
     return (_db.select(_db.mealRatings)

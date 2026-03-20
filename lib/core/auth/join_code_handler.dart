@@ -19,16 +19,20 @@ class JoinCodeHandler {
     final uri = Uri.base;
     String? code;
 
-    // Path strategy: /join?code=XXX
+    // Path strategy: /join?code=XXX ou /join?join_code=XXX
+    // Note : join_code est utilisé quand Supabase ajoute son propre param
+    // "code" (PKCE) dans l'URL — on utilise un nom différent pour éviter
+    // le conflit lors de la redirection post-confirmation email.
     if (uri.path.contains('/join')) {
-      code = uri.queryParameters['code'];
+      code = uri.queryParameters['join_code'] ?? uri.queryParameters['code'];
     }
 
-    // Hash strategy: /#/join?code=XXX
+    // Hash strategy: /#/join?code=XXX ou /#/join?join_code=XXX
     if (code == null && uri.fragment.contains('/join')) {
       try {
         final fragmentUri = Uri.parse(uri.fragment);
-        code = fragmentUri.queryParameters['code'];
+        code = fragmentUri.queryParameters['join_code'] ??
+            fragmentUri.queryParameters['code'];
       } catch (_) {
         // Fragment mal formé, ignorer
       }

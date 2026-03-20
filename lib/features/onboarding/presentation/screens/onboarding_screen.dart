@@ -70,10 +70,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Column(
                 children: [
-                  // Logo
-                  Image.asset(
-                    'assets/icon/logo_menufacile.png',
-                    height: 40,
+                  // Logo + bouton Passer
+                  Row(
+                    children: [
+                      const Spacer(),
+                      Image.asset(
+                        'assets/icon/logo_menufacile.png',
+                        height: 40,
+                      ),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _complete,
+                            child: Text(
+                              'Passer',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
 

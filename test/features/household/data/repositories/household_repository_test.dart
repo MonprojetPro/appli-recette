@@ -19,8 +19,12 @@ void main() {
   late AppDatabase db;
   late HouseholdRepositoryImpl repo;
 
+  const testHouseholdId = 'test-household-uuid';
+
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'household_id': testHouseholdId,
+    });
     db = _createTestDatabase();
     final memberDs = MemberLocalDatasource(db);
     final ratingDs = MealRatingDatasource(db);
@@ -46,7 +50,7 @@ void main() {
     test('addMember() persiste le membre dans drift', () async {
       await repo.addMember(name: 'Alizée', age: 9);
 
-      final members = await repo.watchAll().first;
+      final members = await repo.watchAll(testHouseholdId).first;
       expect(members.length, 1);
       expect(members.first.name, 'Alizée');
       expect(members.first.age, 9);
@@ -55,13 +59,13 @@ void main() {
     test('addMember() sans âge persiste avec age null', () async {
       await repo.addMember(name: 'Membre sans âge');
 
-      final members = await repo.watchAll().first;
+      final members = await repo.watchAll(testHouseholdId).first;
       expect(members.first.name, 'Membre sans âge');
       expect(members.first.age, isNull);
     });
 
     test('watchAll() retourne liste vide quand aucun membre', () async {
-      final members = await repo.watchAll().first;
+      final members = await repo.watchAll(testHouseholdId).first;
       expect(members, isEmpty);
     });
 
@@ -70,7 +74,7 @@ void main() {
       await repo.addMember(name: 'Partenaire');
       await repo.addMember(name: 'Léonard', age: 11);
 
-      final members = await repo.watchAll().first;
+      final members = await repo.watchAll(testHouseholdId).first;
       expect(members.length, 3);
       final names = members.map((m) => m.name).toList();
       expect(names, containsAll(['MiKL', 'Partenaire', 'Léonard']));
@@ -81,7 +85,7 @@ void main() {
 
       await repo.updateMember(id: id, name: 'Léonard', age: 11);
 
-      final members = await repo.watchAll().first;
+      final members = await repo.watchAll(testHouseholdId).first;
       expect(members.first.name, 'Léonard');
       expect(members.first.age, 11);
     });
@@ -91,7 +95,7 @@ void main() {
 
       await repo.updateMember(id: id, name: 'Test');
 
-      final members = await repo.watchAll().first;
+      final members = await repo.watchAll(testHouseholdId).first;
       expect(members.first.age, isNull);
     });
 
@@ -100,7 +104,7 @@ void main() {
 
       await repo.deleteMember(id);
 
-      final members = await repo.watchAll().first;
+      final members = await repo.watchAll(testHouseholdId).first;
       expect(members, isEmpty);
     });
 

@@ -17,13 +17,41 @@ class InitialSyncService {
 
   /// Télécharge toutes les données du foyer [householdId] depuis Supabase
   /// et les upserte dans drift.
+  /// Supprime d'abord les données locales appartenant à un autre foyer.
   /// Initialise aussi les présences par défaut pour tout membre sans planning.
   Future<void> syncFromSupabase(String householdId) async {
+    await _cleanStaleData(householdId);
     await _syncMembers(householdId);
     await _syncRecipes(householdId);
     await _syncIngredients(householdId);
     await _syncRecipeSteps(householdId);
     await _initMissingPresences(householdId);
+  }
+
+  // ── Nettoyage données périmées ────────────────────────────────────────────
+
+  /// Supprime les membres et recettes locaux qui n'appartiennent pas au foyer [householdId].
+  /// Cela évite l'accumulation de données provenant de foyers précédents.
+  Future<void> _cleanStaleData(String householdId) async {
+    await _db.transaction(() async {
+      // Supprimer les membres d'un autre foyer (cascade vers meal_ratings et presence_schedules)
+      await (_db.delete(_db.members)
+            ..where(
+              (t) =>
+                  t.householdId.isNull() |
+                  t.householdId.equals(householdId).not(),
+            ))
+          .go();
+
+      // Supprimer les recettes d'un autre foyer (cascade vers ingredients)
+      await (_db.delete(_db.recipes)
+            ..where(
+              (t) =>
+                  t.householdId.isNull() |
+                  t.householdId.equals(householdId).not(),
+            ))
+          .go();
+    });
   }
 
   // ── Members ───────────────────────────────────────────────────────────────

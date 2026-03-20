@@ -22,13 +22,22 @@ class AuthService {
   /// Crée un nouveau compte utilisateur.
   ///
   /// [AuthResponse.session] est null si la confirmation email est requise.
-  /// [emailRedirectTo] redirige vers /login après confirmation email
-  /// pour éviter un flash sur la home avec un token temporaire.
-  Future<AuthResponse> signUp(String email, String password) {
+  /// [emailRedirectTo] : si un code d'invitation est en attente, on l'encode
+  /// dans l'URL (/join?join_code=XXX) pour que l'auto-join fonctionne même
+  /// si l'utilisateur ouvre le lien sur un autre appareil / navigateur.
+  Future<AuthResponse> signUp(
+    String email,
+    String password, {
+    String? pendingJoinCode,
+  }) {
+    final redirectTo = pendingJoinCode != null && pendingJoinCode.isNotEmpty
+        ? '$_webBaseUrl/join?join_code=$pendingJoinCode'
+        : '$_webBaseUrl/login';
+
     return _client.auth.signUp(
       email: email,
       password: password,
-      emailRedirectTo: '${_webBaseUrl}/login',
+      emailRedirectTo: redirectTo,
     );
   }
 

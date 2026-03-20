@@ -33,22 +33,24 @@ class HouseholdRepositoryImpl implements HouseholdRepository {
   // ── Membres ──────────────────────────────────────────────────────────────
 
   @override
-  Stream<List<Member>> watchAll() => _memberDatasource.watchAll();
+  Stream<List<Member>> watchAll(String householdId) =>
+      _memberDatasource.watchAll(householdId);
 
   @override
   Future<String> addMember({required String name, int? age}) async {
     final id = const Uuid().v4();
     final now = DateTime.now();
+    final householdId = await _getHouseholdId();
     final companion = MembersCompanion.insert(
       id: id,
       name: name,
       age: age != null ? Value(age) : const Value.absent(),
+      householdId:
+          householdId != null ? Value(householdId) : const Value.absent(),
       createdAt: now,
       updatedAt: now,
     );
     final result = await _memberDatasource.insert(companion);
-
-    final householdId = await _getHouseholdId();
     await _syncQueue.enqueue(
       SyncQueueCompanion.insert(
         id: const Uuid().v4(),

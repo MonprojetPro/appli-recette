@@ -25,7 +25,8 @@ final syncQueueProcessorProvider = Provider<SyncQueueProcessor>((ref) {
 final syncServiceProvider = Provider<SyncService>((ref) {
   final monitor = ref.watch(connectivityMonitorProvider);
   final processor = ref.watch(syncQueueProcessorProvider);
-  final service = SyncService(monitor, processor);
+  final db = ref.watch(databaseProvider);
+  final service = SyncService(monitor, processor, db);
   ref.onDispose(service.dispose);
   service.start();
   return service;

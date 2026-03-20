@@ -20,8 +20,12 @@ void main() {
   late AppDatabase db;
   late RecipeRepositoryImpl repo;
 
+  const testHouseholdId = 'test-household-uuid';
+
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'household_id': testHouseholdId,
+    });
     db = _createTestDatabase();
     final datasource = RecipeLocalDatasource(db);
     final syncQueue = SyncQueueDatasource(db);
@@ -56,7 +60,7 @@ void main() {
         restTimeMinutes: 0,
       );
 
-      final recipes = await repo.watchAll().first;
+      final recipes = await repo.watchAll(testHouseholdId).first;
       expect(recipes.length, 1);
       expect(recipes.first.name, 'Tarte aux pommes');
       expect(recipes.first.mealType, 'dessert');
@@ -72,7 +76,7 @@ void main() {
         prepTimeMinutes: 10,
       );
 
-      final recipes = await repo.watchAll().first;
+      final recipes = await repo.watchAll(testHouseholdId).first;
       expect(recipes.first.cookTimeMinutes, 0);
       expect(recipes.first.restTimeMinutes, 0);
     });
@@ -89,7 +93,7 @@ void main() {
         prepTimeMinutes: 20,
       );
 
-      final recipes = await repo.watchAll().first;
+      final recipes = await repo.watchAll(testHouseholdId).first;
       expect(recipes.length, 2);
       final names = recipes.map((r) => r.name).toList();
       expect(names, containsAll(['Recette 1', 'Recette 2']));
@@ -104,7 +108,7 @@ void main() {
 
       await repo.delete(id);
 
-      final recipes = await repo.watchAll().first;
+      final recipes = await repo.watchAll(testHouseholdId).first;
       expect(recipes, isEmpty);
     });
 
@@ -116,11 +120,11 @@ void main() {
       );
 
       await repo.setFavorite(id: id, isFavorite: true);
-      final recipesAfter = await repo.watchAll().first;
+      final recipesAfter = await repo.watchAll(testHouseholdId).first;
       expect(recipesAfter.first.isFavorite, isTrue);
 
       await repo.setFavorite(id: id, isFavorite: false);
-      final recipesAfterToggle = await repo.watchAll().first;
+      final recipesAfterToggle = await repo.watchAll(testHouseholdId).first;
       expect(recipesAfterToggle.first.isFavorite, isFalse);
     });
 

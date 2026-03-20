@@ -36,6 +36,14 @@
     #mz-loading p { margin-top: 16px; font-size: 14px; color: #7a7a7a; }
   </style>
   <script>
+    // Enregistrement du service worker PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
+  <script>
     (function() {
       var d = document.createElement('div');
       d.id = 'mz-loading';

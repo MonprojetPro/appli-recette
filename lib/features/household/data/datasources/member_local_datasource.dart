@@ -7,9 +7,10 @@ class MemberLocalDatasource {
 
   final AppDatabase _db;
 
-  /// Stream de tous les membres triés par date de création ASC.
-  Stream<List<Member>> watchAll() {
+  /// Stream de tous les membres du foyer triés par date de création ASC.
+  Stream<List<Member>> watchAll(String householdId) {
     return (_db.select(_db.members)
+          ..where((t) => t.householdId.equals(householdId))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .watch();
   }

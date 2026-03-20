@@ -4,11 +4,11 @@ import 'package:appli_recette/features/recipes/domain/repositories/ingredient_re
 /// Interface du Repository Recettes.
 /// La couche présentation dépend uniquement de cette interface.
 abstract class RecipeRepository {
-  /// Stream de toutes les recettes, ordonnées par date de création DESC.
-  Stream<List<Recipe>> watchAll();
+  /// Stream de toutes les recettes du foyer, ordonnées par date de création DESC.
+  Stream<List<Recipe>> watchAll(String householdId);
 
-  /// Stream filtré par recherche sur le nom.
-  Stream<List<Recipe>> watchBySearch(String query);
+  /// Stream filtré par recherche sur le nom, limité au foyer.
+  Stream<List<Recipe>> watchBySearch(String query, String householdId);
 
   /// Récupère une recette par son ID.
   Future<Recipe?> getById(String id);

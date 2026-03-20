@@ -1,6 +1,7 @@
 import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
+import 'package:appli_recette/core/household/household_providers.dart';
 import 'package:appli_recette/core/storage/image_service.dart';
 import 'package:appli_recette/core/storage/supabase_storage_service.dart';
 import 'package:appli_recette/core/sync/sync_provider.dart';
@@ -61,19 +62,23 @@ final ingredientRepositoryProvider = Provider<IngredientRepository>((ref) {
 // Stream providers (lecture)
 // ---------------------------------------------------------------------------
 
-/// Stream de toutes les recettes (sans filtre).
+/// Stream de toutes les recettes du foyer courant.
 final recipesStreamProvider = StreamProvider<List<Recipe>>((ref) {
+  final householdId = ref.watch(currentHouseholdIdProvider).value;
+  if (householdId == null) return const Stream.empty();
   final repo = ref.watch(recipeRepositoryProvider);
-  return repo.watchAll();
+  return repo.watchAll(householdId);
 });
 
 // ignore_for_file: specify_nonobvious_property_types -- types inférés depuis les generics Riverpod
-/// Stream de recettes filtrées par recherche.
+/// Stream de recettes du foyer courant filtrées par recherche.
 final recipesSearchProvider =
     StreamProvider.family<List<Recipe>, String>((ref, query) {
+  final householdId = ref.watch(currentHouseholdIdProvider).value;
+  if (householdId == null) return const Stream.empty();
   final repo = ref.watch(recipeRepositoryProvider);
-  if (query.isEmpty) return repo.watchAll();
-  return repo.watchBySearch(query);
+  if (query.isEmpty) return repo.watchAll(householdId);
+  return repo.watchBySearch(query, householdId);
 });
 
 /// Stream des ingrédients d'une recette.

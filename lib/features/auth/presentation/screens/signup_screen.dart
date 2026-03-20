@@ -3,6 +3,7 @@ import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Écran de création de compte email/mot de passe.
@@ -58,9 +59,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     try {
       final service = ref.read(authServiceProvider);
+      final prefs = await SharedPreferences.getInstance();
+      final pendingJoinCode = prefs.getString('pending_join_code');
       final response = await service.signUp(
         _emailController.text.trim(),
         _passwordController.text,
+        pendingJoinCode: pendingJoinCode,
       );
 
       // Supabase retourne 200 avec identities vide pour un repeated signup

@@ -6,8 +6,8 @@ import 'package:appli_recette/features/household/data/models/rating_value.dart';
 abstract class HouseholdRepository {
   // ── Membres ──────────────────────────────────────────────────────────────
 
-  /// Stream de tous les membres, ordonnés par date de création ASC.
-  Stream<List<Member>> watchAll();
+  /// Stream de tous les membres du foyer, ordonnés par date de création ASC.
+  Stream<List<Member>> watchAll(String householdId);
 
   /// Crée un nouveau membre. Retourne l'ID UUID v4 créé.
   Future<String> addMember({required String name, int? age});

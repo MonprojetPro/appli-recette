@@ -17,8 +17,12 @@ void main() {
   late AppDatabase db;
   late RecipeRepositoryImpl repo;
 
+  const testHouseholdId = 'test-household-uuid';
+
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'household_id': testHouseholdId,
+    });
     db = _createTestDatabase();
     final datasource = RecipeLocalDatasource(db);
     final syncQueue = SyncQueueDatasource(db);
@@ -214,7 +218,7 @@ void main() {
 
       await repo.delete(id1);
 
-      final remaining = await repo.watchAll().first;
+      final remaining = await repo.watchAll(testHouseholdId).first;
       expect(remaining.length, 1);
       expect(remaining.first.id, id2);
     });
@@ -270,11 +274,13 @@ void main() {
         prepTimeMinutes: 20,
       );
 
-      final pouletResults = await repo.watchBySearch('Poulet').first;
+      final pouletResults =
+          await repo.watchBySearch('Poulet', testHouseholdId).first;
       expect(pouletResults.length, 2);
       expect(pouletResults.every((r) => r.name.contains('Poulet')), isTrue);
 
-      final patesResults = await repo.watchBySearch('Pâtes').first;
+      final patesResults =
+          await repo.watchBySearch('Pâtes', testHouseholdId).first;
       expect(patesResults.length, 1);
       expect(patesResults.first.name, 'Pâtes carbonara');
     });
@@ -286,7 +292,7 @@ void main() {
         prepTimeMinutes: 30,
       );
 
-      final results = await repo.watchBySearch('pizza').first;
+      final results = await repo.watchBySearch('pizza', testHouseholdId).first;
       expect(results, isEmpty);
     });
   });
