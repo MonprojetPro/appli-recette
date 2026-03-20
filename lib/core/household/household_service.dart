@@ -93,8 +93,8 @@ class HouseholdService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyHouseholdCode, code);
 
-    // Nouveau foyer créé → l'onboarding doit être refait pour ce foyer
-    await prefs.remove('onboarding_complete');
+    // Nouveau foyer créé → déclencher l'onboarding pour ce foyer
+    await prefs.setBool('onboarding_in_progress', true);
 
     return code;
   }
@@ -219,8 +219,7 @@ class HouseholdService {
         // Le code sera récupéré au prochain accès si nécessaire
       }
 
-      // Compte connu sur un nouvel appareil → pas besoin de refaire l'onboarding
-      await prefs.setBool('onboarding_complete', true);
+      // Compte connu sur un nouvel appareil → onboarding non requis (défaut)
       await InitialSyncService(_db).syncFromSupabase(householdId);
       return householdId;
     } catch (_) {
