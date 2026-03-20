@@ -1,3 +1,4 @@
+import 'package:appli_recette/core/household/household_providers.dart';
 import 'package:appli_recette/features/onboarding/domain/onboarding_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,6 +21,11 @@ final onboardingServiceProvider = Provider<OnboardingService>((ref) {
 class OnboardingNotifier extends AsyncNotifier<bool> {
   @override
   Future<bool> build() async {
+    // Se ré-évaluer quand l'état du foyer change.
+    // Garantit que les prefs sont relus après la récupération Supabase sur
+    // un nouvel appareil (getCurrentHouseholdId écrit onboarding_complete=true
+    // dans les prefs avant de retourner — ce watch déclenche la relecture).
+    ref.watch(currentHouseholdIdProvider);
     return ref.watch(onboardingServiceProvider).isComplete();
   }
 

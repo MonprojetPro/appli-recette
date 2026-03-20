@@ -1,9 +1,7 @@
 import 'package:appli_recette/core/auth/auth_state_provider.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
 import 'package:appli_recette/core/household/household_service.dart';
-import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Provider du service de gestion du foyer.
@@ -33,29 +31,13 @@ final autoJoinInProgressProvider =
 ///    Cela évite de redemander "Rejoindre un foyer" sur un nouveau navigateur.
 ///
 /// Dépend de [authStateProvider] pour se ré-évaluer quand la session est prête.
+/// [onboardingNotifierProvider] se ré-évalue automatiquement quand ce provider
+/// change — garantissant que l'état onboarding reflète les prefs après récupération.
 final currentHouseholdIdProvider = FutureProvider<String?>((ref) async {
   // Se ré-évaluer quand l'état auth change (session restaurée)
   ref.watch(authStateProvider);
   final service = ref.watch(householdServiceProvider);
-  final householdId = await service.getCurrentHouseholdId();
-
-  // Synchronisation onboarding ← foyer récupéré (nouveau device ou reconnexion).
-  //
-  // SharedPreferences est la source de vérité pour onboarding_complete.
-  // Si les prefs disent "complet" mais que le provider Riverpod ne le sait pas
-  // encore (nouveau build du provider, ou 1ère résolution après install),
-  // on force la mise à jour pour que le router parte vers '/' et non '/onboarding'.
-  if (householdId != null) {
-    final prefs = await SharedPreferences.getInstance();
-    final prefsComplete = prefs.getBool('onboarding_complete') == true;
-    final riverpodComplete =
-        ref.read(onboardingNotifierProvider).value == true;
-    if (prefsComplete && !riverpodComplete) {
-      await ref.read(onboardingNotifierProvider.notifier).complete();
-    }
-  }
-
-  return householdId;
+  return service.getCurrentHouseholdId();
 });
 
 /// Provider du code d'invitation du foyer courant.
