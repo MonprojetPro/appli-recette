@@ -67,7 +67,7 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
       final code = await service.createHousehold(name: _nameController.text.trim());
       if (mounted) {
         // Reset onboarding pour que les 3 étapes s'affichent
-        await ref.read(onboardingNotifierProvider.notifier).reset();
+        ref.read(onboardingNotifierProvider.notifier).reset();
         ref.invalidate(currentHouseholdIdProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Foyer créé — code : $code')),
@@ -91,7 +91,7 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
       await service.joinHousehold(_codeValue);
       if (mounted) {
         // Rejoindre un foyer existant → onboarding skippé, aller directement à l'accueil
-        await ref.read(onboardingNotifierProvider.notifier).complete();
+        ref.read(onboardingNotifierProvider.notifier).complete();
         ref.invalidate(currentHouseholdIdProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Foyer rejoint avec succès')),

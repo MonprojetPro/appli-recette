@@ -2,7 +2,7 @@ import 'package:appli_recette/features/onboarding/domain/onboarding_service.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ---------------------------------------------------------------------------
-// Infrastructure provider
+// Infrastructure provider — une seule instance par session app
 // ---------------------------------------------------------------------------
 
 final onboardingServiceProvider = Provider<OnboardingService>((ref) {
@@ -10,34 +10,34 @@ final onboardingServiceProvider = Provider<OnboardingService>((ref) {
 });
 
 // ---------------------------------------------------------------------------
-// Notifier principal
+// Notifier principal — synchrone, pas d'async, pas de SharedPreferences
 // ---------------------------------------------------------------------------
 
 /// Notifier pour l'état de complétion de l'onboarding.
 ///
-/// - [build] : lit le flag persisté (async). Défaut = true (complet).
-/// - [complete] : marque l'onboarding comme terminé et met à jour l'état
+/// - Défaut : true (complet) — aucun appel réseau, aucun localStorage
+/// - [complete] : marque l'onboarding terminé
 /// - [reset] : signale qu'un onboarding est requis (nouveau foyer créé)
-class OnboardingNotifier extends AsyncNotifier<bool> {
+class OnboardingNotifier extends Notifier<bool> {
   @override
-  Future<bool> build() async {
-    return ref.watch(onboardingServiceProvider).isComplete();
+  bool build() {
+    // Par défaut : onboarding complet — l'onboarding ne s'affiche que
+    // si reset() est explicitement appelé dans la même session.
+    return ref.read(onboardingServiceProvider).isComplete();
   }
 
-  /// Marque l'onboarding comme terminé et notifie les listeners.
-  Future<void> complete() async {
-    state = await AsyncValue.guard(() async {
-      await ref.read(onboardingServiceProvider).setComplete();
-      return true;
-    });
+  /// Marque l'onboarding comme terminé.
+  void complete() {
+    ref.read(onboardingServiceProvider).setComplete();
+    state = true;
   }
 
   /// Signale qu'un onboarding est requis (nouveau foyer créé).
-  Future<void> reset() async {
-    await ref.read(onboardingServiceProvider).reset();
-    state = const AsyncValue.data(false);
+  void reset() {
+    ref.read(onboardingServiceProvider).reset();
+    state = false;
   }
 }
 
 final onboardingNotifierProvider =
-    AsyncNotifierProvider<OnboardingNotifier, bool>(OnboardingNotifier.new);
+    NotifierProvider<OnboardingNotifier, bool>(OnboardingNotifier.new);

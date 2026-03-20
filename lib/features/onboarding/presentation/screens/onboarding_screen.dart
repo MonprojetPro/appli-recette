@@ -42,12 +42,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Future<void> _complete() async {
-    // L'auth est maintenant gérée par AuthService (email/password).
-    // Le foyer est configuré via /household-setup (Story 8.2).
-    // Ici, on marque simplement l'onboarding comme terminé.
-    await ref.read(onboardingNotifierProvider.notifier).complete();
-    // GoRouter redirect redirige automatiquement vers / via authStateProvider.
+  void _complete() {
+    // Marque l'onboarding comme terminé.
+    // GoRouter redirect redirige automatiquement vers /.
+    ref.read(onboardingNotifierProvider.notifier).complete();
   }
 
   @override

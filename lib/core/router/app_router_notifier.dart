@@ -28,7 +28,8 @@ class AppRouterNotifier extends ChangeNotifier {
       currentHouseholdIdProvider,
       (_, __) => notifyListeners(),
     );
-    _ref.listen<AsyncValue<bool>>(
+    // onboardingNotifierProvider est maintenant synchrone (bool, pas AsyncValue)
+    _ref.listen<bool>(
       onboardingNotifierProvider,
       (_, __) => notifyListeners(),
     );
@@ -84,10 +85,12 @@ class AppRouterNotifier extends ChangeNotifier {
       return isPublic ? null : '/login';
     }
 
-    // Authentifié : attendre que les providers async soient résolus
+    // Authentifié : attendre que le provider household async soit résolu
     final householdAsync = _ref.read(currentHouseholdIdProvider);
-    final onboardingAsync = _ref.read(onboardingNotifierProvider);
-    if (householdAsync.isLoading || onboardingAsync.isLoading) return null;
+    if (householdAsync.isLoading) return null;
+
+    // onboarding est synchrone — lecture directe du bool
+    final onboardingComplete = _ref.read(onboardingNotifierProvider);
 
     // Authentifié sur une route publique → rediriger vers l'app
     if (isPublic) {
@@ -104,7 +107,7 @@ class AppRouterNotifier extends ChangeNotifier {
 
     // Route /onboarding : vérifier si déjà complété
     if (loc == '/onboarding') {
-      if (onboardingAsync.value == true) return '/';
+      if (onboardingComplete) return '/';
       return null;
     }
 
@@ -144,7 +147,7 @@ class AppRouterNotifier extends ChangeNotifier {
       await prefs.remove('pending_join_code');
 
       // Rejoindre via lien → onboarding skippé, aller directement à l'accueil
-      await _ref.read(onboardingNotifierProvider.notifier).complete();
+      _ref.read(onboardingNotifierProvider.notifier).complete();
 
       // Invalider le provider → le router se réévalue vers '/'
       _ref.invalidate(currentHouseholdIdProvider);
@@ -159,16 +162,15 @@ class AppRouterNotifier extends ChangeNotifier {
 
   /// Détermine la route par défaut pour un utilisateur authentifié.
   ///
-  /// Retourne `null` tant que les providers async ne sont pas résolus,
-  /// ce qui évite un flicker vers la home avant la vraie destination.
+  /// Retourne `null` tant que le provider household async n'est pas résolu.
   String? _resolveAuthenticatedRoute() {
     final householdAsync = _ref.read(currentHouseholdIdProvider);
     if (householdAsync.isLoading) return null;
     if (householdAsync.value == null) return '/household-setup';
 
-    final onboardingAsync = _ref.read(onboardingNotifierProvider);
-    if (onboardingAsync.isLoading) return null;
-    if (!(onboardingAsync.value ?? false)) return '/onboarding';
+    // onboarding synchrone — lecture directe
+    final onboardingComplete = _ref.read(onboardingNotifierProvider);
+    if (!onboardingComplete) return '/onboarding';
 
     return '/';
   }

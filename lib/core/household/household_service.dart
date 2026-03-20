@@ -93,9 +93,6 @@ class HouseholdService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyHouseholdCode, code);
 
-    // Nouveau foyer créé → déclencher l'onboarding pour ce foyer
-    await prefs.setBool('onboarding_in_progress', true);
-
     return code;
   }
 
@@ -186,7 +183,6 @@ class HouseholdService {
       // Autre utilisateur authentifié → purger les données stale
       await prefs.remove(_keyHouseholdId);
       await prefs.remove(_keyAuthUserId);
-      await prefs.remove('onboarding_complete');
     }
 
     // Pas de household_id local valide → vérifier dans Supabase
