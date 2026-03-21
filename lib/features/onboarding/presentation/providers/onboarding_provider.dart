@@ -10,34 +10,36 @@ final onboardingServiceProvider = Provider<OnboardingService>((ref) {
 });
 
 // ---------------------------------------------------------------------------
-// Notifier principal — synchrone, pas d'async, pas de SharedPreferences
+// Notifier principal — async au build (lecture SharedPreferences), sync ensuite
 // ---------------------------------------------------------------------------
 
 /// Notifier pour l'état de complétion de l'onboarding.
 ///
-/// - Défaut : true (complet) — aucun appel réseau, aucun localStorage
-/// - [complete] : marque l'onboarding terminé
-/// - [reset] : signale qu'un onboarding est requis (nouveau foyer créé)
-class OnboardingNotifier extends Notifier<bool> {
+/// - Build : charge depuis SharedPreferences (async)
+/// - Défaut si absent : true (complet) — pas d'onboarding pour les comptes existants
+/// - [complete] : marque l'onboarding terminé + persiste
+/// - [reset] : signale qu'un onboarding est requis (nouveau foyer créé) + persiste
+class OnboardingNotifier extends AsyncNotifier<bool> {
   @override
-  bool build() {
-    // Par défaut : onboarding complet — l'onboarding ne s'affiche que
-    // si reset() est explicitement appelé dans la même session.
-    return ref.read(onboardingServiceProvider).isComplete();
+  Future<bool> build() async {
+    final service = ref.read(onboardingServiceProvider);
+    return service.loadComplete();
   }
 
-  /// Marque l'onboarding comme terminé.
-  void complete() {
-    ref.read(onboardingServiceProvider).setComplete();
-    state = true;
+  /// Marque l'onboarding comme terminé et persiste dans SharedPreferences.
+  Future<void> complete() async {
+    final service = ref.read(onboardingServiceProvider);
+    await service.setComplete();
+    state = const AsyncData(true);
   }
 
   /// Signale qu'un onboarding est requis (nouveau foyer créé).
-  void reset() {
-    ref.read(onboardingServiceProvider).reset();
-    state = false;
+  Future<void> reset() async {
+    final service = ref.read(onboardingServiceProvider);
+    await service.reset();
+    state = const AsyncData(false);
   }
 }
 
 final onboardingNotifierProvider =
-    NotifierProvider<OnboardingNotifier, bool>(OnboardingNotifier.new);
+    AsyncNotifierProvider<OnboardingNotifier, bool>(OnboardingNotifier.new);

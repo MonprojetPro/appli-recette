@@ -42,10 +42,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  void _complete() {
-    // Marque l'onboarding comme terminé.
+  Future<void> _complete() async {
+    // Marque l'onboarding comme terminé + persiste dans SharedPreferences.
     // GoRouter redirect redirige automatiquement vers /.
-    ref.read(onboardingNotifierProvider.notifier).complete();
+    await ref.read(onboardingNotifierProvider.notifier).complete();
   }
 
   @override

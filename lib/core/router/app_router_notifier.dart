@@ -28,8 +28,7 @@ class AppRouterNotifier extends ChangeNotifier {
       currentHouseholdIdProvider,
       (_, __) => notifyListeners(),
     );
-    // onboardingNotifierProvider est maintenant synchrone (bool, pas AsyncValue)
-    _ref.listen<bool>(
+    _ref.listen<AsyncValue<bool>>(
       onboardingNotifierProvider,
       (_, __) => notifyListeners(),
     );
@@ -89,8 +88,10 @@ class AppRouterNotifier extends ChangeNotifier {
     final householdAsync = _ref.read(currentHouseholdIdProvider);
     if (householdAsync.isLoading) return null;
 
-    // onboarding est synchrone — lecture directe du bool
-    final onboardingComplete = _ref.read(onboardingNotifierProvider);
+    // Attendre que l'état onboarding soit chargé depuis SharedPreferences
+    final onboardingAsync = _ref.read(onboardingNotifierProvider);
+    if (onboardingAsync.isLoading) return null;
+    final onboardingComplete = onboardingAsync.value ?? true;
 
     // Authentifié sur une route publique → rediriger vers l'app
     if (isPublic) {
@@ -147,7 +148,7 @@ class AppRouterNotifier extends ChangeNotifier {
       await prefs.remove('pending_join_code');
 
       // Rejoindre via lien → onboarding skippé, aller directement à l'accueil
-      _ref.read(onboardingNotifierProvider.notifier).complete();
+      await _ref.read(onboardingNotifierProvider.notifier).complete();
 
       // Invalider le provider → le router se réévalue vers '/'
       _ref.invalidate(currentHouseholdIdProvider);
@@ -168,8 +169,9 @@ class AppRouterNotifier extends ChangeNotifier {
     if (householdAsync.isLoading) return null;
     if (householdAsync.value == null) return '/household-setup';
 
-    // onboarding synchrone — lecture directe
-    final onboardingComplete = _ref.read(onboardingNotifierProvider);
+    final onboardingAsync = _ref.read(onboardingNotifierProvider);
+    if (onboardingAsync.isLoading) return null;
+    final onboardingComplete = onboardingAsync.value ?? true;
     if (!onboardingComplete) return '/onboarding';
 
     return '/';
