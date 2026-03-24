@@ -9,6 +9,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// État de l'auto-join (lien d'invitation).
+enum AutoJoinStatus {
+  idle,       // Pas de code en attente
+  inProgress, // Tentative en cours
+  failed,     // Échec — l'utilisateur doit saisir manuellement
+}
+
+/// Provider exposé à HouseholdSetupScreen pour afficher le bon état.
+final autoJoinStatusProvider =
+    StateProvider<AutoJoinStatus>((ref) => AutoJoinStatus.idle);
+
 /// Provider du notifier de routing — rafraîchit GoRouter quand l'auth change.
 final appRouterNotifierProvider = Provider<AppRouterNotifier>((ref) {
   return AppRouterNotifier(ref);
@@ -18,6 +29,7 @@ final appRouterNotifierProvider = Provider<AppRouterNotifier>((ref) {
 /// du foyer et de l'onboarding.
 ///
 /// Chaîne de décision :
+/// 0. Password recovery → /reset-password
 /// 1. Pas authentifié + /join → sauvegarder code → /signup
 /// 2. Pas authentifié → /login (sauf routes publiques)
 /// 3. Authentifié + pending join code → auto-join fire-and-forget
@@ -26,7 +38,11 @@ final appRouterNotifierProvider = Provider<AppRouterNotifier>((ref) {
 /// 6. Authentifié + foyer + onboarding fait → / (accueil)
 class AppRouterNotifier extends ChangeNotifier {
   AppRouterNotifier(this._ref) {
-    _ref.listen<AsyncValue<AuthState>>(authStateProvider, (_, __) {
+    _ref.listen<AsyncValue<AuthState>>(authStateProvider, (_, next) {
+      // Détecter la session de récupération de mot de passe
+      if (next.value?.event == AuthChangeEvent.passwordRecovery) {
+        _isPasswordRecovery = true;
+      }
       notifyListeners();
     });
     _ref.listen<AsyncValue<String?>>(currentHouseholdIdProvider, (_, __) {
@@ -39,6 +55,7 @@ class AppRouterNotifier extends ChangeNotifier {
 
   final Ref _ref;
   bool _autoJoinAttempted = false;
+  bool _isPasswordRecovery = false;
 
   /// Routes publiques accessibles sans authentification.
   static const _publicRoutes = [
@@ -57,14 +74,20 @@ class AppRouterNotifier extends ChangeNotifier {
     // Auth encore en chargement → pas de redirect
     if (authAsync.isLoading) return null;
 
+    // ─── Password Recovery ────────────────────────────────────────
+    // L'utilisateur a cliqué le lien de reset MDP dans son email.
+    // Supabase a émis AuthChangeEvent.passwordRecovery.
+    if (_isPasswordRecovery) {
+      if (currentPath == AppRoutes.resetPassword) return null;
+      return AppRoutes.resetPassword;
+    }
+
     final session = Supabase.instance.client.auth.currentSession;
     final isAuthenticated = session != null;
     final isOnPublicRoute = _publicRoutes.contains(currentPath);
 
     // ─── Pas authentifié ───────────────────────────────────────────
     if (!isAuthenticated) {
-      // /join → le code a déjà été capturé par JoinCodeHandler dans main
-      // Rediriger vers /signup pour créer un compte
       if (currentPath == AppRoutes.join) {
         return AppRoutes.signup;
       }
@@ -76,6 +99,11 @@ class AppRouterNotifier extends ChangeNotifier {
 
     // Si sur une route publique → résoudre la destination authentifiée
     if (isOnPublicRoute) {
+      return _resolveAuthenticatedRoute();
+    }
+
+    // Sur /reset-password sans être en recovery → retour à l'accueil
+    if (currentPath == AppRoutes.resetPassword) {
       return _resolveAuthenticatedRoute();
     }
 
@@ -115,6 +143,12 @@ class AppRouterNotifier extends ChangeNotifier {
     return null;
   }
 
+  /// Réinitialise le flag password recovery après changement de MDP.
+  void clearPasswordRecovery() {
+    _isPasswordRecovery = false;
+    notifyListeners();
+  }
+
   /// Détermine la destination pour un utilisateur authentifié.
   String? _resolveAuthenticatedRoute() {
     final householdAsync = _ref.read(currentHouseholdIdProvider);
@@ -135,9 +169,6 @@ class AppRouterNotifier extends ChangeNotifier {
   }
 
   /// Auto-join fire-and-forget depuis un code d'invitation.
-  ///
-  /// Parcours 3 : l'utilisateur a cliqué un lien d'invitation,
-  /// créé un compte, et se connecte. Le code est en mémoire/SharedPreferences.
   void _tryAutoJoin() {
     _autoJoinAttempted = true;
 
@@ -153,11 +184,15 @@ class AppRouterNotifier extends ChangeNotifier {
       if (code != null) {
         _executeAutoJoin(code);
       }
+      // Pas de code → l'utilisateur saisit manuellement, pas de loading
     });
   }
 
   /// Exécute l'auto-join avec le code donné.
   Future<void> _executeAutoJoin(String code) async {
+    _ref.read(autoJoinStatusProvider.notifier).state =
+        AutoJoinStatus.inProgress;
+
     try {
       debugPrint('[Router] Auto-join avec code: $code');
       final service = _ref.read(householdServiceProvider);
@@ -169,11 +204,13 @@ class AppRouterNotifier extends ChangeNotifier {
       // Consommer le code
       await JoinCodeHandler.consume();
 
+      _ref.read(autoJoinStatusProvider.notifier).state = AutoJoinStatus.idle;
+
       // Invalider le provider foyer → le router réévalue
       _ref.invalidate(currentHouseholdIdProvider);
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('[Router] Auto-join échoué: $e');
-      // L'utilisateur verra le household-setup pour saisir manuellement
+      _ref.read(autoJoinStatusProvider.notifier).state = AutoJoinStatus.failed;
     }
   }
 }

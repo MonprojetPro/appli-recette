@@ -2,6 +2,7 @@ import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/router/app_router_notifier.dart';
 import 'package:appli_recette/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:appli_recette/features/auth/presentation/screens/login_screen.dart';
+import 'package:appli_recette/features/auth/presentation/screens/reset_password_screen.dart';
 import 'package:appli_recette/features/auth/presentation/screens/signup_screen.dart';
 import 'package:appli_recette/features/auth/presentation/screens/verify_email_screen.dart';
 import 'package:appli_recette/features/generation/presentation/screens/home_screen.dart';
@@ -50,6 +51,9 @@ abstract class AppRoutes {
   // Invitation deep-link (Story 8.3)
   static const join = '/join';
 
+  // Reset mot de passe (Parcours 4)
+  static const resetPassword = '/reset-password';
+
   // Onboarding
   static const onboarding = '/onboarding';
 
@@ -84,6 +88,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.forgotPassword,
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.resetPassword,
+        builder: (context, state) => const ResetPasswordScreen(),
       ),
       GoRoute(
         path: AppRoutes.verifyEmail,

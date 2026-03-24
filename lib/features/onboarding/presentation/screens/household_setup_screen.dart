@@ -1,4 +1,5 @@
 import 'package:appli_recette/core/household/household_providers.dart';
+import 'package:appli_recette/core/router/app_router_notifier.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:flutter/material.dart';
@@ -48,6 +49,31 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Écouter l'état de l'auto-join pour afficher le bon écran
+    final autoJoinStatus = ref.watch(autoJoinStatusProvider);
+
+    if (autoJoinStatus == AutoJoinStatus.inProgress) {
+      return _buildAutoJoinLoading(context);
+    }
+
+    if (autoJoinStatus == AutoJoinStatus.failed) {
+      // Afficher le mode sélection avec un message d'erreur
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Connexion au foyer impossible. Vérifiez le code ou saisissez-le manuellement.',
+              ),
+              backgroundColor: AppColors.error,
+              duration: Duration(seconds: 5),
+            ),
+          );
+          ref.read(autoJoinStatusProvider.notifier).state = AutoJoinStatus.idle;
+        }
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -73,6 +99,55 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
       case _SetupMode.join:
         return _buildJoin(context);
     }
+  }
+
+  /// Écran de chargement pendant l'auto-join via lien d'invitation.
+  Widget _buildAutoJoinLoading(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(
+                  color: AppColors.primary,
+                  strokeWidth: 3,
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  'Connexion au foyer en cours…',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Nous rejoignons votre foyer automatiquement grâce au lien d\'invitation.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Cela peut prendre quelques secondes…',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textHint,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Mode sélection ──────────────────────────────────────────────────
