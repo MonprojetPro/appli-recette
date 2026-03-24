@@ -5,6 +5,7 @@ import 'package:appli_recette/features/auth/presentation/screens/login_screen.da
 import 'package:appli_recette/features/auth/presentation/screens/reset_password_screen.dart';
 import 'package:appli_recette/features/auth/presentation/screens/signup_screen.dart';
 import 'package:appli_recette/features/auth/presentation/screens/verify_email_screen.dart';
+import 'package:appli_recette/features/contact/presentation/screens/contact_screen.dart';
 import 'package:appli_recette/features/generation/presentation/screens/home_screen.dart';
 import 'package:appli_recette/features/household/view/household_page.dart';
 import 'package:appli_recette/features/settings/presentation/screens/settings_screen.dart';
@@ -47,6 +48,9 @@ abstract class AppRoutes {
 
   // Settings (Story 8.3)
   static const settings = '/settings';
+
+  // Contact
+  static const contact = '/contact';
 
   // Invitation deep-link (Story 8.3)
   static const join = '/join';
@@ -210,6 +214,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.contact,
+                builder: (context, state) => const ContactScreen(),
+              ),
+            ],
+          ),
         ],
       ),
 
@@ -300,6 +312,11 @@ class AppShell extends ConsumerWidget {
             icon: Icon(Icons.calendar_today_outlined),
             selectedIcon: Icon(Icons.calendar_today),
             label: 'Planning',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.mail_outline),
+            selectedIcon: Icon(Icons.mail),
+            label: 'Contact',
           ),
         ],
       ),
