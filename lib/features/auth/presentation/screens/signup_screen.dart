@@ -1,15 +1,14 @@
 import 'package:appli_recette/core/auth/auth_providers.dart';
+import 'package:appli_recette/core/router/app_router.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Écran de création de compte email/mot de passe.
+/// Écran d'inscription — email + mot de passe + confirmation.
 ///
-/// Gère : création de compte (AC-4), validation inline (AC-4, AC-7),
-/// navigation vers vérification email, retour vers login.
+/// Parcours 1, 2, 3 (étapes 2-3).
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
@@ -22,10 +21,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
-  bool _isLoading = false;
-  String? _errorMessage;
 
   @override
   void dispose() {
@@ -35,265 +33,273 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     super.dispose();
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
-  String _humanizeError(AuthException e) {
-    return switch (e.message) {
-      'User already registered' => 'Un compte existe déjà avec cet email.',
-      'Invalid email' => 'Adresse email invalide.',
-      'Password should be at least 6 characters' =>
-        'Le mot de passe doit contenir au moins 8 caractères.',
-      _ => 'Une erreur est survenue. Réessayez.',
-    };
-  }
-
-  // ── Actions ─────────────────────────────────────────────────────────────────
-
-  Future<void> _signUp() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-
-    setState(() {
-      _errorMessage = null;
-      _isLoading = true;
-    });
-
-    try {
-      final service = ref.read(authServiceProvider);
-      final prefs = await SharedPreferences.getInstance();
-      final pendingJoinCode = prefs.getString('pending_join_code');
-      final response = await service.signUp(
-        _emailController.text.trim(),
-        _passwordController.text,
-        pendingJoinCode: pendingJoinCode,
-      );
-
-      // Supabase retourne 200 avec identities vide pour un repeated signup
-      final identities = response.user?.identities;
-      if (identities == null || identities.isEmpty) {
-        if (mounted) {
-          context.go('/login?existing=true');
-        }
-        return;
-      }
-
-      if (mounted) {
-        context.pushReplacement(
-          '/verify-email',
-          extra: _emailController.text.trim(),
-        );
-      }
-    } on AuthException catch (e) {
-      if (mounted) setState(() => _errorMessage = _humanizeError(e));
-    } catch (e) {
-      if (mounted) {
-        setState(() => _errorMessage = 'Une erreur est survenue. Réessayez.');
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ── Build ────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          'Créer un compte',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
-        ),
-      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Bienvenue !',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.person_add_outlined,
+                    size: 64,
+                    color: AppColors.primary,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Créez votre compte pour synchroniser vos recettes et menus.',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 32),
-
-                // Email
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Veuillez saisir votre email.';
-                    }
-                    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                    if (!emailRegex.hasMatch(value.trim())) {
-                      return 'Adresse email invalide.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Mot de passe
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: 'Mot de passe',
-                    prefixIcon: const Icon(Icons.lock_outlined),
-                    border: const OutlineInputBorder(),
-                    helperText: 'Minimum 8 caractères',
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                      ),
-                      onPressed: () => setState(
-                        () => _obscurePassword = !_obscurePassword,
-                      ),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Veuillez saisir un mot de passe.';
-                    }
-                    if (value.length < 8) {
-                      return 'Le mot de passe doit contenir au moins 8 caractères.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Confirmation mot de passe
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  obscureText: _obscureConfirm,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _isLoading ? null : _signUp(),
-                  decoration: InputDecoration(
-                    labelText: 'Confirmer le mot de passe',
-                    prefixIcon: const Icon(Icons.lock_outlined),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirm
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                      ),
-                      onPressed: () => setState(
-                        () => _obscureConfirm = !_obscureConfirm,
-                      ),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Veuillez confirmer votre mot de passe.';
-                    }
-                    if (value != _passwordController.text) {
-                      return 'Les mots de passe ne correspondent pas.';
-                    }
-                    return null;
-                  },
-                ),
-
-                // Erreur serveur
-                if (_errorMessage != null) ...[
                   const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.error.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      _errorMessage!,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AppColors.error),
+                  Text(
+                    'Créer un compte',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Rejoignez MenuFacile',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Formulaire
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: _inputDecoration(
+                            label: 'Email',
+                            icon: Icons.email_outlined,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Saisissez votre email';
+                            }
+                            if (!v.contains('@')) {
+                              return 'Email invalide';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          autofillHints: const [AutofillHints.newPassword],
+                          decoration: _inputDecoration(
+                            label: 'Mot de passe',
+                            icon: Icons.lock_outline,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: AppColors.textHint,
+                              ),
+                              onPressed: () => setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              }),
+                            ),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) {
+                              return 'Saisissez un mot de passe';
+                            }
+                            if (v.length < 6) {
+                              return 'Minimum 6 caractères';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _confirmPasswordController,
+                          obscureText: _obscureConfirm,
+                          decoration: _inputDecoration(
+                            label: 'Confirmer le mot de passe',
+                            icon: Icons.lock_outline,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirm
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: AppColors.textHint,
+                              ),
+                              onPressed: () => setState(() {
+                                _obscureConfirm = !_obscureConfirm;
+                              }),
+                            ),
+                          ),
+                          validator: (v) {
+                            if (v != _passwordController.text) {
+                              return 'Les mots de passe ne correspondent pas';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                ],
-                const SizedBox(height: 32),
+                  const SizedBox(height: 24),
 
-                // Bouton Créer mon compte (AC-4)
-                SizedBox(
-                  height: 52,
-                  child: FilledButton(
-                    onPressed: _isLoading ? null : _signUp,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
+                  // Bouton inscription
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: FilledButton(
+                      onPressed: _isLoading ? null : _signUp,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Créer mon compte',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          )
-                        : const Text(
-                            'Créer mon compte',
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Lien vers connexion
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Déjà un compte ? ',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => context.go(AppRoutes.login),
+                          child: const Text(
+                            'Se connecter',
                             style: TextStyle(
-                              fontSize: 16,
+                              color: AppColors.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Lien vers login
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.pop(),
-                    child: Text(
-                      "J'ai déjà un compte",
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.primary,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: AppColors.textHint),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: AppColors.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.divider),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.divider),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.error),
+      ),
+    );
+  }
+
+  Future<void> _signUp() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      final response = await authService.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      // Supabase retourne un user avec identities vide si le compte existe déjà
+      final identities = response.user?.identities;
+      if (identities != null && identities.isEmpty) {
+        if (!mounted) return;
+        // Rediriger vers login avec message "compte existant"
+        context.go('${AppRoutes.login}?existing=true');
+        return;
+      }
+
+      if (!mounted) return;
+      // Succès → écran de vérification email (email dans l'URL pour survie web)
+      context.go(
+        '${AppRoutes.verifyEmail}?email=${Uri.encodeComponent(_emailController.text.trim())}',
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_humanizeError(e.message)),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erreur réseau. Réessayez.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _humanizeError(String message) {
+    if (message.contains('already registered')) {
+      return 'Un compte existe déjà avec cet email.';
+    }
+    if (message.contains('password')) {
+      return 'Le mot de passe doit contenir au moins 6 caractères.';
+    }
+    return 'Erreur : $message';
   }
 }

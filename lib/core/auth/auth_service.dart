@@ -1,65 +1,55 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Service d'authentification email/mot de passe via Supabase Auth.
+/// Service d'authentification — wrapper propre autour de Supabase Auth.
 ///
-/// Remplace l'authentification anonyme. La persistance de session
-/// est gérée automatiquement par supabase_flutter (localStorage web,
-/// SharedPreferences mobile).
+/// Réécriture complète (2026-03-23) — voir auth-rewrite-spec.
 class AuthService {
-  AuthService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  AuthService();
 
-  final SupabaseClient _client;
+  SupabaseClient get _client => Supabase.instance.client;
 
-  /// Connecte un utilisateur existant avec email + mot de passe.
-  Future<AuthResponse> signIn(String email, String password) {
-    return _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+  /// Crée un nouveau compte email + mot de passe.
+  Future<AuthResponse> signUp({
+    required String email,
+    required String password,
+  }) async {
+    return _client.auth.signUp(email: email, password: password);
   }
 
-  /// Crée un nouveau compte utilisateur.
+  /// Connexion email + mot de passe.
+  Future<AuthResponse> signIn({
+    required String email,
+    required String password,
+  }) async {
+    return _client.auth.signInWithPassword(email: email, password: password);
+  }
+
+  /// Déconnexion — supprime la session locale.
+  Future<void> signOut() async {
+    await _client.auth.signOut();
+  }
+
+  /// Envoie un email de réinitialisation de mot de passe.
+  Future<void> resetPassword(String email) async {
+    await _client.auth.resetPasswordForEmail(email);
+  }
+
+  /// Renvoie l'email de confirmation.
   ///
-  /// [AuthResponse.session] est null si la confirmation email est requise.
-  /// [emailRedirectTo] : si un code d'invitation est en attente, on l'encode
-  /// dans l'URL (/join?join_code=XXX) pour que l'auto-join fonctionne même
-  /// si l'utilisateur ouvre le lien sur un autre appareil / navigateur.
-  Future<AuthResponse> signUp(
-    String email,
-    String password, {
-    String? pendingJoinCode,
-  }) {
-    final redirectTo = pendingJoinCode != null && pendingJoinCode.isNotEmpty
-        ? '$_webBaseUrl/join?join_code=$pendingJoinCode'
-        : '$_webBaseUrl/login';
-
-    return _client.auth.signUp(
-      email: email,
-      password: password,
-      emailRedirectTo: redirectTo,
-    );
+  /// Utilise resend() — JAMAIS signUp() avec mot de passe vide.
+  Future<void> resendConfirmationEmail(String email) async {
+    await _client.auth.resend(type: OtpType.signup, email: email);
   }
 
-  /// URL de base web, injectée via dart-define ou défaut menufacile.
-  static const _webBaseUrl = String.fromEnvironment(
-    'WEB_BASE_URL',
-    defaultValue: 'https://menufacile.app',
-  );
-
-  /// Envoie un email de réinitialisation du mot de passe.
-  Future<void> resetPassword(String email) {
-    return _client.auth.resetPasswordForEmail(email);
-  }
-
-  /// Déconnecte l'utilisateur courant.
-  Future<void> signOut() {
-    return _client.auth.signOut();
-  }
-
-  /// Utilisateur actuellement connecté (null = non authentifié).
+  /// L'utilisateur actuellement connecté, ou null.
   User? get currentUser => _client.auth.currentUser;
 
-  /// UUID de l'utilisateur courant (null = non authentifié).
+  /// L'ID de l'utilisateur connecté, ou null.
   String? get currentUserId => _client.auth.currentUser?.id;
+
+  /// True si une session active existe.
+  bool get isAuthenticated => _client.auth.currentSession != null;
+
+  /// Stream des changements d'état d'authentification.
+  Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 }

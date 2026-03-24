@@ -15,10 +15,8 @@ import 'package:appli_recette/features/recipes/view/create_full_recipe_page.dart
 import 'package:appli_recette/features/recipes/view/recipe_detail_screen.dart';
 import 'package:appli_recette/features/recipes/view/recipes_page.dart';
 import 'package:appli_recette/features/generation/presentation/providers/generation_provider.dart';
-import 'package:appli_recette/features/planning/data/utils/week_utils.dart';
 import 'package:appli_recette/features/planning/presentation/providers/planning_provider.dart';
 import 'package:appli_recette/features/recipes/presentation/providers/recipes_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -90,7 +88,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.verifyEmail,
         builder: (context, state) => VerifyEmailScreen(
-          email: state.extra as String?,
+          email: state.uri.queryParameters['email'] ?? state.extra as String?,
         ),
       ),
 

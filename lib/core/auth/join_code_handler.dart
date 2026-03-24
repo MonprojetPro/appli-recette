@@ -1,46 +1,73 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Capture le code d'invitation depuis l'URL du navigateur.
+/// Capture le code d'invitation depuis l'URL avant que GoRouter ne la consomme.
 ///
-/// Doit être appelé AVANT le bootstrap pour capturer le code
-/// depuis `Uri.base` avant que GoRouter ne modifie l'URL.
+/// Supporte deux formats :
+/// - `/join?code=847392` (query parameter)
+/// - `/join?join_code=847392` (query parameter)
+///
+/// Le code est sauvegardé en mémoire (priorité, pas de latence async)
+/// ET dans SharedPreferences (fallback si l'app recharge).
 class JoinCodeHandler {
-  static const _kPendingJoinCode = 'pending_join_code';
+  static String? _pendingJoinCode;
 
-  /// Capture le code d'invitation depuis l'URL si présent.
-  ///
-  /// Détecte les URLs de type :
-  /// - `https://menuzen.vercel.app/join?code=123456`
-  /// - `https://menuzen.vercel.app/#/join?code=123456`
+  /// Le code en mémoire (lecture synchrone, pas de latence).
+  static String? get pendingJoinCode => _pendingJoinCode;
+
+  /// Appelé AVANT Supabase.initialize() pour capturer le code d'invitation.
   static Future<void> captureFromUrl() async {
-    if (!kIsWeb) return;
+    try {
+      final uri = Uri.base;
+      String? code;
 
-    final uri = Uri.base;
-    String? code;
+      // Chercher dans les query parameters
+      code ??= uri.queryParameters['code'];
+      code ??= uri.queryParameters['join_code'];
 
-    // Path strategy: /join?code=XXX ou /join?join_code=XXX
-    // Note : join_code est utilisé quand Supabase ajoute son propre param
-    // "code" (PKCE) dans l'URL — on utilise un nom différent pour éviter
-    // le conflit lors de la redirection post-confirmation email.
-    if (uri.path.contains('/join')) {
-      code = uri.queryParameters['join_code'] ?? uri.queryParameters['code'];
-    }
-
-    // Hash strategy: /#/join?code=XXX ou /#/join?join_code=XXX
-    if (code == null && uri.fragment.contains('/join')) {
-      try {
-        final fragmentUri = Uri.parse(uri.fragment);
-        code = fragmentUri.queryParameters['join_code'] ??
-            fragmentUri.queryParameters['code'];
-      } catch (_) {
-        // Fragment mal formé, ignorer
+      // Chercher dans le path: /join/847392
+      if (code == null && uri.path.startsWith('/join/')) {
+        final segment = uri.path.replaceFirst('/join/', '');
+        if (RegExp(r'^\d{6}$').hasMatch(segment)) {
+          code = segment;
+        }
       }
+
+      if (code != null && RegExp(r'^\d{6}$').hasMatch(code)) {
+        _pendingJoinCode = code;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('pending_join_code', code);
+        debugPrint('[JoinCodeHandler] Code capturé: $code');
+      }
+    } catch (e) {
+      debugPrint('[JoinCodeHandler] Erreur capture: $e');
+    }
+  }
+
+  /// Consomme le code (une seule utilisation).
+  static Future<String?> consume() async {
+    // Priorité mémoire (pas de latence async)
+    if (_pendingJoinCode != null) {
+      final code = _pendingJoinCode;
+      _pendingJoinCode = null;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('pending_join_code');
+      return code;
     }
 
-    if (code != null && code.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kPendingJoinCode, code);
+    // Fallback SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final code = prefs.getString('pending_join_code');
+    if (code != null) {
+      await prefs.remove('pending_join_code');
     }
+    return code;
+  }
+
+  /// Vérifie s'il y a un code en attente (sans le consommer).
+  static Future<bool> hasPendingCode() async {
+    if (_pendingJoinCode != null) return true;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('pending_join_code') != null;
   }
 }

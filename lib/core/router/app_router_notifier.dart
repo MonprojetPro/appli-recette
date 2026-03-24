@@ -1,179 +1,179 @@
 import 'package:appli_recette/core/auth/auth_state_provider.dart';
+import 'package:appli_recette/core/auth/join_code_handler.dart';
 import 'package:appli_recette/core/household/household_providers.dart';
+import 'package:appli_recette/core/router/app_router.dart';
 import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Provider du notifier utilisé par GoRouter pour ré-évaluer les redirects.
+/// Provider du notifier de routing — rafraîchit GoRouter quand l'auth change.
 final appRouterNotifierProvider = Provider<AppRouterNotifier>((ref) {
-  final notifier = AppRouterNotifier(ref);
-  ref.onDispose(notifier.dispose);
-  return notifier;
+  return AppRouterNotifier(ref);
 });
 
-/// Notifier qui déclenche la réévaluation du redirect GoRouter.
+/// Notifier de routing — gère les redirects selon l'état d'authentification,
+/// du foyer et de l'onboarding.
 ///
-/// Écoute les changements d'état auth, de foyer et d'onboarding,
-/// puis appelle [notifyListeners] pour que GoRouter réévalue les redirects.
+/// Chaîne de décision :
+/// 1. Pas authentifié + /join → sauvegarder code → /signup
+/// 2. Pas authentifié → /login (sauf routes publiques)
+/// 3. Authentifié + pending join code → auto-join fire-and-forget
+/// 4. Authentifié + pas de foyer → /household-setup
+/// 5. Authentifié + foyer + onboarding pas fait → /onboarding
+/// 6. Authentifié + foyer + onboarding fait → / (accueil)
 class AppRouterNotifier extends ChangeNotifier {
   AppRouterNotifier(this._ref) {
-    _ref.listen<AsyncValue<AuthState>>(
-      authStateProvider,
-      (_, __) => notifyListeners(),
-    );
-    _ref.listen<AsyncValue<String?>>(
-      currentHouseholdIdProvider,
-      (_, __) => notifyListeners(),
-    );
-    _ref.listen<AsyncValue<bool>>(
-      onboardingNotifierProvider,
-      (_, __) => notifyListeners(),
-    );
+    _ref.listen<AsyncValue<AuthState>>(authStateProvider, (_, __) {
+      notifyListeners();
+    });
+    _ref.listen<AsyncValue<String?>>(currentHouseholdIdProvider, (_, __) {
+      notifyListeners();
+    });
+    _ref.listen<AsyncValue<bool>>(onboardingNotifierProvider, (_, __) {
+      notifyListeners();
+    });
   }
 
   final Ref _ref;
-  bool _autoJoinInProgress = false;
+  bool _autoJoinAttempted = false;
 
-  /// Stockage en mémoire du code d'invitation (évite la race condition
-  /// entre la sauvegarde async SharedPreferences et _tryAutoJoin).
-  String? _pendingJoinCode;
-
-  /// Préfixes de routes publiques (accessibles sans authentification).
-  static const _publicPrefixes = [
-    '/login',
-    '/signup',
-    '/forgot-password',
-    '/verify-email',
-    '/join',
+  /// Routes publiques accessibles sans authentification.
+  static const _publicRoutes = [
+    AppRoutes.login,
+    AppRoutes.signup,
+    AppRoutes.forgotPassword,
+    AppRoutes.verifyEmail,
+    AppRoutes.join,
   ];
 
-  /// Logique de redirection pour GoRouter.
-  ///
-  /// Retourne un chemin cible ou null (pas de redirection).
+  /// Redirect principal — appelé par GoRouter à chaque navigation.
   String? redirect(BuildContext context, GoRouterState state) {
-    final loc = state.matchedLocation;
     final authAsync = _ref.read(authStateProvider);
+    final currentPath = state.matchedLocation;
 
-    // Attendre que l'état auth soit disponible
+    // Auth encore en chargement → pas de redirect
     if (authAsync.isLoading) return null;
 
-    final session = authAsync.value?.session;
+    final session = Supabase.instance.client.auth.currentSession;
     final isAuthenticated = session != null;
-    final isPublic = _publicPrefixes.any((p) => loc.startsWith(p));
+    final isOnPublicRoute = _publicRoutes.contains(currentPath);
 
-    // /join — sauvegarder le code et rediriger vers /signup
-    if (loc.startsWith('/join')) {
-      final code = state.uri.queryParameters['code'];
-      if (code != null && code.isNotEmpty) {
-        // Stockage synchrone en mémoire : élimine la race condition
-        // entre la sauvegarde async SharedPreferences et _tryAutoJoin().
-        _pendingJoinCode = code;
-        // Aussi sauvegarder dans SharedPreferences pour persistance (app restart)
-        SharedPreferences.getInstance().then((prefs) {
-          prefs.setString('pending_join_code', code);
-        });
-      }
-      return isAuthenticated ? '/' : '/signup';
-    }
-
-    // Non authentifié : autoriser routes publiques, bloquer le reste
+    // ─── Pas authentifié ───────────────────────────────────────────
     if (!isAuthenticated) {
-      return isPublic ? null : '/login';
+      // /join → le code a déjà été capturé par JoinCodeHandler dans main
+      // Rediriger vers /signup pour créer un compte
+      if (currentPath == AppRoutes.join) {
+        return AppRoutes.signup;
+      }
+      if (isOnPublicRoute) return null;
+      return AppRoutes.login;
     }
 
-    // Authentifié : attendre que le provider household async soit résolu
-    final householdAsync = _ref.read(currentHouseholdIdProvider);
-    if (householdAsync.isLoading) return null;
+    // ─── Authentifié ───────────────────────────────────────────────
 
-    // Attendre que l'état onboarding soit chargé depuis SharedPreferences
-    final onboardingAsync = _ref.read(onboardingNotifierProvider);
-    if (onboardingAsync.isLoading) return null;
-    final onboardingComplete = onboardingAsync.value ?? true;
-
-    // Authentifié sur une route publique → rediriger vers l'app
-    if (isPublic) {
+    // Si sur une route publique → résoudre la destination authentifiée
+    if (isOnPublicRoute) {
       return _resolveAuthenticatedRoute();
     }
 
-    // Route /household-setup : vérifier si vraiment nécessaire
-    if (loc == '/household-setup') {
-      if (householdAsync.value != null) {
-        return _resolveAuthenticatedRoute();
-      }
-      return null;
-    }
+    // Sur /household-setup → vérifier si le foyer est déjà configuré
+    if (currentPath == AppRoutes.householdSetup) {
+      final householdAsync = _ref.read(currentHouseholdIdProvider);
+      final hasHousehold = householdAsync.value != null;
+      if (hasHousehold) return _checkOnboarding();
 
-    // Route /onboarding : vérifier si déjà complété
-    if (loc == '/onboarding') {
-      if (onboardingComplete) return '/';
-      return null;
-    }
-
-    // Routes protégées : vérifier foyer configuré
-    if (householdAsync.value == null) {
-      // Vérifier s'il y a un code d'invitation pending (deep-link /join)
-      if (!_autoJoinInProgress) {
-        _autoJoinInProgress = true;
-        _ref.read(autoJoinInProgressProvider.notifier).setInProgress(true);
+      // Tenter auto-join si un code est en attente
+      if (!_autoJoinAttempted) {
         _tryAutoJoin();
       }
-      return '/household-setup';
+      return null;
     }
+
+    // Sur /onboarding → vérifier si déjà fait
+    if (currentPath == AppRoutes.onboarding) {
+      final onboardingAsync = _ref.read(onboardingNotifierProvider);
+      final isComplete = onboardingAsync.value ?? false;
+      if (isComplete) return AppRoutes.home;
+      return null;
+    }
+
+    // Route protégée → vérifier foyer
+    final householdAsync = _ref.read(currentHouseholdIdProvider);
+    if (householdAsync.isLoading) return null;
+    final hasHousehold = householdAsync.value != null;
+    if (!hasHousehold) return AppRoutes.householdSetup;
+
+    // Foyer OK → vérifier onboarding
+    final onboardingAsync = _ref.read(onboardingNotifierProvider);
+    if (onboardingAsync.isLoading) return null;
+    final onboardingComplete = onboardingAsync.value ?? false;
+    if (!onboardingComplete) return AppRoutes.onboarding;
 
     return null;
   }
 
-  /// Tente un auto-join si un pending_join_code est stocké.
-  ///
-  /// Lancé en fire-and-forget : si le code est valide, les providers
-  /// sont invalidés et le router se réévalue automatiquement vers '/'.
-  /// Utilise d'abord le code en mémoire (_pendingJoinCode) pour éviter
-  /// la race condition avec la sauvegarde async SharedPreferences.
-  Future<void> _tryAutoJoin() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      // Priorité au code en mémoire (pas de race condition)
-      final code = _pendingJoinCode ?? prefs.getString('pending_join_code');
-      _pendingJoinCode = null; // Consommé
-
-      if (code == null || code.isEmpty) return;
-
-      final service = _ref.read(householdServiceProvider);
-      await service.joinHousehold(code);
-
-      // Consommer le code stocké après un join réussi
-      await prefs.remove('pending_join_code');
-
-      // Rejoindre via lien → onboarding skippé, aller directement à l'accueil
-      await _ref.read(onboardingNotifierProvider.notifier).complete();
-
-      // Invalider le provider → le router se réévalue vers '/'
-      _ref.invalidate(currentHouseholdIdProvider);
-    } catch (e) {
-      // Echec — l'utilisateur reste sur /household-setup pour saisir manuellement
-      debugPrint('[AutoJoin] échec: $e');
-    } finally {
-      _autoJoinInProgress = false;
-      _ref.read(autoJoinInProgressProvider.notifier).setInProgress(false);
-    }
-  }
-
-  /// Détermine la route par défaut pour un utilisateur authentifié.
-  ///
-  /// Retourne `null` tant que le provider household async n'est pas résolu.
+  /// Détermine la destination pour un utilisateur authentifié.
   String? _resolveAuthenticatedRoute() {
     final householdAsync = _ref.read(currentHouseholdIdProvider);
     if (householdAsync.isLoading) return null;
-    if (householdAsync.value == null) return '/household-setup';
+    final hasHousehold = householdAsync.value != null;
 
+    if (!hasHousehold) return AppRoutes.householdSetup;
+
+    return _checkOnboarding();
+  }
+
+  /// Vérifie l'état d'onboarding et redirige.
+  String _checkOnboarding() {
     final onboardingAsync = _ref.read(onboardingNotifierProvider);
-    if (onboardingAsync.isLoading) return null;
-    final onboardingComplete = onboardingAsync.value ?? true;
-    if (!onboardingComplete) return '/onboarding';
+    final isComplete = onboardingAsync.value ?? false;
+    if (!isComplete) return AppRoutes.onboarding;
+    return AppRoutes.home;
+  }
 
-    return '/';
+  /// Auto-join fire-and-forget depuis un code d'invitation.
+  ///
+  /// Parcours 3 : l'utilisateur a cliqué un lien d'invitation,
+  /// créé un compte, et se connecte. Le code est en mémoire/SharedPreferences.
+  void _tryAutoJoin() {
+    _autoJoinAttempted = true;
+
+    // Lecture synchrone mémoire d'abord (pas de latence)
+    final memoryCode = JoinCodeHandler.pendingJoinCode;
+    if (memoryCode != null) {
+      _executeAutoJoin(memoryCode);
+      return;
+    }
+
+    // Fallback async SharedPreferences
+    JoinCodeHandler.consume().then((code) {
+      if (code != null) {
+        _executeAutoJoin(code);
+      }
+    });
+  }
+
+  /// Exécute l'auto-join avec le code donné.
+  Future<void> _executeAutoJoin(String code) async {
+    try {
+      debugPrint('[Router] Auto-join avec code: $code');
+      final service = _ref.read(householdServiceProvider);
+      await service.joinHousehold(code);
+
+      // Skip onboarding pour les utilisateurs qui rejoignent
+      await _ref.read(onboardingNotifierProvider.notifier).complete();
+
+      // Consommer le code
+      await JoinCodeHandler.consume();
+
+      // Invalider le provider foyer → le router réévalue
+      _ref.invalidate(currentHouseholdIdProvider);
+    } catch (e) {
+      debugPrint('[Router] Auto-join échoué: $e');
+      // L'utilisateur verra le household-setup pour saisir manuellement
+    }
   }
 }

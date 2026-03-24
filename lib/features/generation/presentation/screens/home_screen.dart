@@ -1,5 +1,4 @@
 import 'package:appli_recette/core/auth/auth_providers.dart';
-import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:appli_recette/core/constants/generation_constants.dart';
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/database/database_provider.dart';
@@ -556,9 +555,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     await processor.processQueue(); // flush sync avant de vider
     await db.clearAll();
+    // Nettoyer SharedPreferences SAUF onboarding_complete (persiste)
     await prefs.remove('household_id');
     await prefs.remove('auth_user_id');
     await prefs.remove('household_code');
+    await prefs.remove('pending_join_code');
     ref.invalidate(currentHouseholdIdProvider);
     await authService.signOut();
 

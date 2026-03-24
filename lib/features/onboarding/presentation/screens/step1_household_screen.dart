@@ -159,8 +159,7 @@ class _Step1HouseholdScreenState extends ConsumerState<Step1HouseholdScreen> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.add),
                     label: const Text('Ajouter au foyer'),
@@ -200,8 +199,7 @@ class _Step1HouseholdScreenState extends ConsumerState<Step1HouseholdScreen> {
             width: double.infinity,
             height: 48,
             child: FilledButton(
-              onPressed:
-                  members.isNotEmpty ? widget.onNext : null,
+              onPressed: members.isNotEmpty ? widget.onNext : null,
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 disabledBackgroundColor: AppColors.disabled,

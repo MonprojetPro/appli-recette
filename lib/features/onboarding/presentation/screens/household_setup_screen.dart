@@ -1,20 +1,20 @@
 import 'package:appli_recette/core/household/household_providers.dart';
-import 'package:appli_recette/core/household/household_service.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Mode d'affichage de l'écran de configuration foyer.
 enum _SetupMode { selection, create, join }
 
-/// Écran de création / jointure de foyer — Story 8.2.
+/// Écran de configuration foyer — créer ou rejoindre.
 ///
-/// Trois modes : sélection (défaut), création, jointure.
-/// Le paramètre optionnel [initialCode] pré-remplit le champ code
-/// lors d'un accès via un lien d'invitation (Story 8.3).
+/// Parcours 1 (étape 6) : Créer un foyer.
+/// Parcours 2 (étape 6) : Rejoindre un foyer avec code 6 chiffres.
 class HouseholdSetupScreen extends ConsumerStatefulWidget {
-  const HouseholdSetupScreen({super.key, this.initialCode});
+  const HouseholdSetupScreen({this.initialCode, super.key});
 
+  /// Code pré-rempli depuis un lien d'invitation (deep link).
   final String? initialCode;
 
   @override
@@ -24,28 +24,17 @@ class HouseholdSetupScreen extends ConsumerStatefulWidget {
 
 class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
   _SetupMode _mode = _SetupMode.selection;
-
-  // Mode Créer
-  final _createFormKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-
-  // Mode Rejoindre
-  final _joinFormKey = GlobalKey<FormState>();
-  late final _codeController =
-      TextEditingController(text: widget.initialCode ?? '');
-  String _codeValue = '';
-
-  bool _loading = false;
+  final _codeController = TextEditingController();
+  bool _isLoading = false;
+  String? _error;
+  String? _createdCode;
 
   @override
   void initState() {
     super.initState();
-    _codeValue = widget.initialCode ?? '';
-    _codeController.addListener(() {
-      setState(() => _codeValue = _codeController.text);
-    });
-
-    if (widget.initialCode != null && widget.initialCode!.length == 6) {
+    if (widget.initialCode != null) {
+      _codeController.text = widget.initialCode!;
       _mode = _SetupMode.join;
     }
   }
@@ -57,372 +46,459 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
     super.dispose();
   }
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-
-  Future<void> _createHousehold() async {
-    if (!_createFormKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-    try {
-      final service = ref.read(householdServiceProvider);
-      final code = await service.createHousehold(name: _nameController.text.trim());
-      if (mounted) {
-        // Reset onboarding pour que les 3 étapes s'affichent
-        await ref.read(onboardingNotifierProvider.notifier).reset();
-        ref.invalidate(currentHouseholdIdProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Foyer créé — code : $code')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _joinHousehold() async {
-    setState(() => _loading = true);
-    try {
-      final service = ref.read(householdServiceProvider);
-      await service.joinHousehold(_codeValue);
-      if (mounted) {
-        // Rejoindre un foyer existant → onboarding skippé, aller directement à l'accueil
-        await ref.read(onboardingNotifierProvider.notifier).complete();
-        ref.invalidate(currentHouseholdIdProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Foyer rejoint avec succès')),
-        );
-      }
-    } on HouseholdNotFoundException {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Code invalide')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  // ── UI ────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final autoJoining = ref.watch(autoJoinInProgressProvider);
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: autoJoining
-              ? _AutoJoinLoadingView(theme: theme)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 32),
-                    Text(
-                      'Configurer votre foyer',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-                    Expanded(
-                      child: switch (_mode) {
-                        _SetupMode.selection => _SelectionView(
-                            onCreateTap: () =>
-                                setState(() => _mode = _SetupMode.create),
-                            onJoinTap: () =>
-                                setState(() => _mode = _SetupMode.join),
-                          ),
-                        _SetupMode.create => _CreateView(
-                            formKey: _createFormKey,
-                            nameController: _nameController,
-                            loading: _loading,
-                            onSubmit: _createHousehold,
-                            onBack: () =>
-                                setState(() => _mode = _SetupMode.selection),
-                          ),
-                        _SetupMode.join => _JoinView(
-                            formKey: _joinFormKey,
-                            codeController: _codeController,
-                            codeValue: _codeValue,
-                            loading: _loading,
-                            onSubmit: _joinHousehold,
-                            onBack: () =>
-                                setState(() => _mode = _SetupMode.selection),
-                          ),
-                      },
-                    ),
-                  ],
-                ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _buildContent(context),
+            ),
+          ),
         ),
       ),
     );
   }
-}
 
-// ── Loading auto-join ─────────────────────────────────────────────────────────
-
-class _AutoJoinLoadingView extends StatelessWidget {
-  const _AutoJoinLoadingView({required this.theme});
-
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 24),
-          Text(
-            'Connexion au foyer en cours…',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: AppColors.textPrimary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Synchronisation des données du foyer',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
+  Widget _buildContent(BuildContext context) {
+    switch (_mode) {
+      case _SetupMode.selection:
+        return _buildSelection(context);
+      case _SetupMode.create:
+        return _buildCreate(context);
+      case _SetupMode.join:
+        return _buildJoin(context);
+    }
   }
-}
 
-// ── Sous-vues ────────────────────────────────────────────────────────────────
+  // ── Mode sélection ──────────────────────────────────────────────────
 
-class _SelectionView extends StatelessWidget {
-  const _SelectionView({
-    required this.onCreateTap,
-    required this.onJoinTap,
-  });
-
-  final VoidCallback onCreateTap;
-  final VoidCallback onJoinTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
+  Widget _buildSelection(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _OptionCard(
-          icon: Icons.add_home_outlined,
-          label: 'Créer un foyer',
-          description: 'Démarrez un nouveau foyer et invitez votre famille.',
-          onTap: onCreateTap,
-        ),
-        const SizedBox(height: 16),
-        _OptionCard(
-          icon: Icons.group_add_outlined,
-          label: 'Rejoindre un foyer',
-          description: 'Entrez le code partagé par votre foyer.',
-          onTap: onJoinTap,
-        ),
+        const Icon(Icons.home_outlined, size: 80, color: AppColors.primary),
         const SizedBox(height: 24),
         Text(
-          'Synchronisez vos recettes et menus avec votre famille.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
-          ),
+          'Configurez votre foyer',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Créez un nouveau foyer ou rejoignez '
+          'celui d\'un proche avec un code.',
           textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+        ),
+        const SizedBox(height: 40),
+
+        // Bouton Créer
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: FilledButton.icon(
+            onPressed: () => setState(() => _mode = _SetupMode.create),
+            icon: const Icon(Icons.add_home_outlined),
+            label: const Text(
+              'Créer un foyer',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Bouton Rejoindre
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() => _mode = _SetupMode.join),
+            icon: const Icon(Icons.group_add_outlined),
+            label: const Text(
+              'Rejoindre un foyer',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary, width: 2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
-}
 
-class _OptionCard extends StatelessWidget {
-  const _OptionCard({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.onTap,
-  });
+  // ── Mode créer ──────────────────────────────────────────────────────
 
-  final IconData icon;
-  final String label;
-  final String description;
-  final VoidCallback onTap;
+  Widget _buildCreate(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.add_home, size: 64, color: AppColors.primary),
+        const SizedBox(height: 16),
+        Text(
+          'Créer un foyer',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 24),
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Icon(icon, size: 40, color: AppColors.primary),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+        if (_createdCode != null) ...[
+          // Code généré affiché
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.success),
+            ),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.success,
+                  size: 48,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Foyer créé !',
+                  style: TextStyle(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Partagez ce code avec vos proches :',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _createdCode!,
+                  style: const TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 10,
+                    color: AppColors.primary,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
+              onPressed: _continueAfterCreate,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              const Icon(Icons.chevron_right),
-            ],
+              child: const Text(
+                'Continuer',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ] else ...[
+          // Formulaire nom du foyer
+          TextField(
+            controller: _nameController,
+            decoration: InputDecoration(
+              labelText: 'Nom du foyer',
+              hintText: 'ex: Famille Dupont',
+              prefixIcon: const Icon(
+                Icons.edit_outlined,
+                color: AppColors.textHint,
+              ),
+              filled: true,
+              fillColor: AppColors.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.divider),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.divider),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: AppColors.primary, width: 2),
+              ),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!, style: const TextStyle(color: AppColors.error)),
+          ],
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
+              onPressed: _isLoading ? null : _createHousehold,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Créer',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 16),
+        if (_createdCode == null)
+          TextButton(
+            onPressed: () => setState(() {
+              _mode = _SetupMode.selection;
+              _error = null;
+            }),
+            child: const Text(
+              'Retour',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ── Mode rejoindre ──────────────────────────────────────────────────
+
+  Widget _buildJoin(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.group_add, size: 64, color: AppColors.primary),
+        const SizedBox(height: 16),
+        Text(
+          'Rejoindre un foyer',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Saisissez le code à 6 chiffres partagé par '
+          'un membre du foyer.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+        ),
+        const SizedBox(height: 24),
+
+        TextField(
+          controller: _codeController,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 8,
+            fontFamily: 'monospace',
+          ),
+          decoration: InputDecoration(
+            counterText: '',
+            hintText: '000000',
+            hintStyle: TextStyle(
+              color: AppColors.textHint.withOpacity(0.3),
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 8,
+              fontFamily: 'monospace',
+            ),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.divider),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.divider),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 2),
+            ),
           ),
         ),
-      ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: const TextStyle(color: AppColors.error)),
+        ],
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: FilledButton(
+            onPressed: _isLoading ? null : _joinHousehold,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: _isLoading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Rejoindre',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextButton(
+          onPressed: () => setState(() {
+            _mode = _SetupMode.selection;
+            _error = null;
+          }),
+          child: const Text(
+            'Retour',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      ],
     );
   }
-}
 
-class _CreateView extends StatelessWidget {
-  const _CreateView({
-    required this.formKey,
-    required this.nameController,
-    required this.loading,
-    required this.onSubmit,
-    required this.onBack,
-  });
+  // ── Actions ──────────────────────────────────────────────────────────
 
-  final GlobalKey<FormState> formKey;
-  final TextEditingController nameController;
-  final bool loading;
-  final VoidCallback onSubmit;
-  final VoidCallback onBack;
+  Future<void> _createHousehold() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Saisissez un nom pour votre foyer');
+      return;
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Form(
-      key: formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextFormField(
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: 'Nom du foyer',
-              hintText: 'Ex : Famille Dupont',
-            ),
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Entrez un nom' : null,
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: loading ? null : onSubmit,
-            child: loading
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Créer mon foyer'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: loading ? null : onBack,
-            child: const Text('Retour'),
-          ),
-        ],
-      ),
-    );
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final service = ref.read(householdServiceProvider);
+      final code = await service.createHousehold(name: name);
+
+      // Après création de foyer → reset onboarding pour forcer le wizard
+      await ref.read(onboardingNotifierProvider.notifier).reset();
+
+      // Invalider le provider foyer pour que le router réévalue
+      ref.invalidate(currentHouseholdIdProvider);
+
+      if (!mounted) return;
+      setState(() {
+        _createdCode = code;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Erreur lors de la création. Réessayez.';
+      });
+    }
   }
-}
 
-class _JoinView extends StatelessWidget {
-  const _JoinView({
-    required this.formKey,
-    required this.codeController,
-    required this.codeValue,
-    required this.loading,
-    required this.onSubmit,
-    required this.onBack,
-  });
+  Future<void> _joinHousehold() async {
+    final code = _codeController.text.trim();
+    if (code.length != 6) {
+      setState(() => _error = 'Le code doit contenir 6 chiffres');
+      return;
+    }
 
-  final GlobalKey<FormState> formKey;
-  final TextEditingController codeController;
-  final String codeValue;
-  final bool loading;
-  final VoidCallback onSubmit;
-  final VoidCallback onBack;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
-  @override
-  Widget build(BuildContext context) {
-    final canSubmit = codeValue.length == 6 && !loading;
+    try {
+      final service = ref.read(householdServiceProvider);
+      await service.joinHousehold(code);
 
-    return Form(
-      key: formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextFormField(
-            controller: codeController,
-            decoration: const InputDecoration(
-              labelText: 'Code foyer (6 chiffres)',
-              hintText: 'XXXXXX',
-            ),
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: canSubmit ? onSubmit : null,
-            child: loading
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Rejoindre le foyer'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: loading ? null : onBack,
-            child: const Text('Retour'),
-          ),
-        ],
-      ),
-    );
+      // Rejoindre un foyer existant → skip onboarding (données déjà là)
+      await ref.read(onboardingNotifierProvider.notifier).complete();
+
+      // Invalider le provider foyer pour que le router réévalue
+      ref.invalidate(currentHouseholdIdProvider);
+
+      // Le router redirige automatiquement vers l'accueil
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = _humanizeJoinError(e);
+      });
+    }
+  }
+
+  void _continueAfterCreate() {
+    // Le router détecte que le foyer existe + onboarding = false
+    // → redirige automatiquement vers /onboarding
+    ref.invalidate(currentHouseholdIdProvider);
+  }
+
+  String _humanizeJoinError(Object e) {
+    final msg = e.toString();
+    if (msg.contains('HouseholdNotFoundException') ||
+        msg.contains('not found')) {
+      return 'Code invalide. Vérifiez avec le propriétaire du foyer.';
+    }
+    if (msg.contains('InvalidCodeFormat')) {
+      return 'Le code doit contenir exactement 6 chiffres.';
+    }
+    return 'Erreur lors de la connexion au foyer. Réessayez.';
   }
 }

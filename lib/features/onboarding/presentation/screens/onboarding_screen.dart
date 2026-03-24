@@ -8,9 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Écran d'onboarding principal — 3 étapes guidées.
 ///
-/// Affiché uniquement lors de la première ouverture de l'app.
-/// Après [_complete()], l'état [onboardingNotifierProvider] passe à `true`
-/// et [_AppContent] (dans app.dart) bascule vers le shell principal.
+/// Parcours 1 (étapes 7-8) : après création du foyer.
+/// Non affiché pour les utilisateurs qui rejoignent un foyer existant.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -23,7 +22,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _currentPage = 0;
 
   static const _totalPages = 3;
-
   static const _stepTitles = ['Foyer', 'Planning', 'Recettes'];
 
   void _nextPage() {
@@ -43,9 +41,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _complete() async {
-    // Marque l'onboarding comme terminé + persiste dans SharedPreferences.
-    // GoRouter redirect redirige automatiquement vers /.
     await ref.read(onboardingNotifierProvider.notifier).complete();
+    // Le router détecte onboarding = true → redirige vers l'accueil
   }
 
   @override
@@ -68,24 +65,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Column(
                 children: [
-                  // Logo + bouton Passer
+                  // Titre + bouton Passer
                   Row(
                     children: [
-                      const Spacer(),
-                      Image.asset(
-                        'assets/icon/logo_menufacile.png',
-                        height: 40,
+                      const Icon(
+                        Icons.restaurant_menu,
+                        color: AppColors.primary,
+                        size: 28,
                       ),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _complete,
-                            child: Text(
-                              'Passer',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'MenuFacile',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: _complete,
+                        child: Text(
+                          'Passer',
+                          style: TextStyle(color: AppColors.textSecondary),
                         ),
                       ),
                     ],

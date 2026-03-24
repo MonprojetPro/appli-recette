@@ -17,7 +17,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   const config = AppConfig(
-    // Remplacer par les vraies clés depuis .env.development
     supabaseUrl: String.fromEnvironment(
       'SUPABASE_URL',
       defaultValue: 'https://placeholder.supabase.co',

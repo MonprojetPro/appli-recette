@@ -4,7 +4,6 @@ import 'package:appli_recette/core/household/invitation_service.dart';
 import 'package:appli_recette/core/household/household_providers.dart';
 import 'package:appli_recette/core/sync/sync_provider.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
-import 'package:appli_recette/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:appli_recette/features/settings/presentation/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -191,9 +190,11 @@ class SettingsScreen extends ConsumerWidget {
     final prefs = await SharedPreferences.getInstance();
     await processor.processQueue(); // flush sync avant de vider
     await db.clearAll();
+    // Nettoyer SharedPreferences SAUF onboarding_complete (persiste)
     await prefs.remove('household_id');
     await prefs.remove('auth_user_id');
     await prefs.remove('household_code');
+    await prefs.remove('pending_join_code');
     ref.invalidate(currentHouseholdIdProvider);
     await authService.signOut();
 

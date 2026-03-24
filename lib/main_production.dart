@@ -10,8 +10,6 @@ import 'package:appli_recette/core/database/app_database.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
-  // DOIT être appelé AVANT ensureInitialized() pour que GoRouter
-  // voie les URLs path-based (/join, /login, etc.) au lieu du hash (#/).
   usePathUrlStrategy();
 
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,11 +28,7 @@ Future<void> main() async {
 
   final database = AppDatabase();
 
-  // Capturer le code d'invitation depuis l'URL AVANT tout le reste.
   await JoinCodeHandler.captureFromUrl();
-
-  // Détecter le fragment de confirmation email AVANT Supabase.initialize()
-  // car l'init consomme le fragment URL (#access_token=...).
   await EmailConfirmationHandler.detectBeforeInit();
 
   await bootstrap(
@@ -43,7 +37,6 @@ Future<void> main() async {
         url: config.supabaseUrl,
         anonKey: config.supabaseAnonKey,
       );
-      // Sign out la session temporaire créée par le fragment de confirmation
       await EmailConfirmationHandler.signOutIfNeeded();
       return App(database: database, config: config);
     },
