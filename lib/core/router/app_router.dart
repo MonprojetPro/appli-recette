@@ -110,10 +110,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ─── Deep-link invitation (Story 8.3) ────────────────────────────────
       // Le code est sauvegardé par le redirect global (app_router_notifier).
-      // Cette route ne sera jamais affichée (toujours redirigée).
+      // Affiche un spinner pendant le temps de redirection (évite l'écran blanc).
       GoRoute(
         path: AppRoutes.join,
-        builder: (context, state) => const SizedBox.shrink(),
+        builder: (context, state) => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
       ),
 
       // ─── Réglages (Story 8.3) ────────────────────────────────────────────

@@ -1,6 +1,8 @@
 import 'package:appli_recette/core/router/app_router.dart';
+import 'package:appli_recette/core/router/app_router_notifier.dart';
 import 'package:appli_recette/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,14 +10,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///
 /// Parcours 4 : l'utilisateur a cliqué le lien dans l'email de reset.
 /// Supabase a créé une session de type "recovery" → ce screen s'affiche.
-class ResetPasswordScreen extends StatefulWidget {
+class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key});
 
   @override
-  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
-class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
@@ -197,7 +200,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           width: double.infinity,
           height: 50,
           child: FilledButton(
-            onPressed: () => context.go(AppRoutes.login),
+            onPressed: () {
+                ref.read(appRouterNotifierProvider).clearPasswordRecovery();
+                context.go(AppRoutes.login);
+              },
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(

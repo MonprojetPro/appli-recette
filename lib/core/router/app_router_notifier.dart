@@ -97,6 +97,12 @@ class AppRouterNotifier extends ChangeNotifier {
 
     // ─── Authentifié ───────────────────────────────────────────────
 
+    // Lien d'invitation → toujours vers /household-setup (évite l'écran blanc
+    // du SizedBox.shrink pendant que le provider household charge)
+    if (currentPath == AppRoutes.join) {
+      return AppRoutes.householdSetup;
+    }
+
     // Si sur une route publique → résoudre la destination authentifiée
     if (isOnPublicRoute) {
       return _resolveAuthenticatedRoute();

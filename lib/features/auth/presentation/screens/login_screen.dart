@@ -55,19 +55,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo / Titre
-                  const Icon(
-                    Icons.restaurant_menu,
-                    size: 64,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'MenuFacile',
-                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  // Logo MenuFacile
+                  Image.asset(
+                    'assets/icon/logo_menufacile.png',
+                    height: 80,
                   ),
                   const SizedBox(height: 8),
                   Text(
