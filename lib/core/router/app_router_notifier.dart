@@ -16,10 +16,6 @@ enum AutoJoinStatus {
   failed,     // Échec — l'utilisateur doit saisir manuellement
 }
 
-/// Provider exposé à HouseholdSetupScreen pour afficher le bon état.
-final autoJoinStatusProvider =
-    StateProvider<AutoJoinStatus>((ref) => AutoJoinStatus.idle);
-
 /// Provider du notifier de routing — rafraîchit GoRouter quand l'auth change.
 final appRouterNotifierProvider = Provider<AppRouterNotifier>((ref) {
   return AppRouterNotifier(ref);
@@ -56,6 +52,10 @@ class AppRouterNotifier extends ChangeNotifier {
   final Ref _ref;
   bool _autoJoinAttempted = false;
   bool _isPasswordRecovery = false;
+  AutoJoinStatus _autoJoinStatus = AutoJoinStatus.idle;
+
+  /// État de l'auto-join — lu par HouseholdSetupScreen.
+  AutoJoinStatus get autoJoinStatus => _autoJoinStatus;
 
   /// Routes publiques accessibles sans authentification.
   static const _publicRoutes = [
@@ -190,8 +190,8 @@ class AppRouterNotifier extends ChangeNotifier {
 
   /// Exécute l'auto-join avec le code donné.
   Future<void> _executeAutoJoin(String code) async {
-    _ref.read(autoJoinStatusProvider.notifier).state =
-        AutoJoinStatus.inProgress;
+    _autoJoinStatus = AutoJoinStatus.inProgress;
+    notifyListeners();
 
     try {
       debugPrint('[Router] Auto-join avec code: $code');
@@ -204,13 +204,14 @@ class AppRouterNotifier extends ChangeNotifier {
       // Consommer le code
       await JoinCodeHandler.consume();
 
-      _ref.read(autoJoinStatusProvider.notifier).state = AutoJoinStatus.idle;
+      _autoJoinStatus = AutoJoinStatus.idle;
 
-      // Invalider le provider foyer → le router réévalue
+      // Invalider le provider foyer → le router réévalue (+ notifyListeners)
       _ref.invalidate(currentHouseholdIdProvider);
     } on Exception catch (e) {
       debugPrint('[Router] Auto-join échoué: $e');
-      _ref.read(autoJoinStatusProvider.notifier).state = AutoJoinStatus.failed;
+      _autoJoinStatus = AutoJoinStatus.failed;
+      notifyListeners();
     }
   }
 }

@@ -49,8 +49,9 @@ class _HouseholdSetupScreenState extends ConsumerState<HouseholdSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Écouter l'état de l'auto-join pour afficher le bon écran
-    final autoJoinStatus = ref.watch(autoJoinStatusProvider);
+    // Écouter l'état de l'auto-join depuis le router notifier
+    final autoJoinStatus =
+        ref.watch(appRouterNotifierProvider).autoJoinStatus;
 
     if (autoJoinStatus == AutoJoinStatus.inProgress) {
       return _buildAutoJoinLoading(context);
