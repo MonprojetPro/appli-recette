@@ -54,6 +54,11 @@ class _AppContentState extends ConsumerState<_AppContent>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Démarrer le service de sync dès le lancement — ne pas attendre qu'un
+    // écran le lise. Critique pour que la sync tourne pendant l'onboarding
+    // (sinon les membres ajoutés avant la home screen ne sont pas pushés vers
+    // Supabase et l'invité ne les voit pas à l'arrivée).
+    ref.read(syncServiceProvider);
   }
 
   @override

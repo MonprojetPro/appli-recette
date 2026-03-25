@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:appli_recette/core/database/app_database.dart';
 import 'package:appli_recette/core/sync/initial_sync_service.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -215,10 +217,18 @@ class HouseholdService {
         // Le code sera récupéré au prochain accès si nécessaire
       }
 
-      // Compte connu sur un nouvel appareil → onboarding non requis (défaut)
-      await InitialSyncService(_db).syncFromSupabase(householdId);
+      // Sync en arrière-plan — CRITIQUE : ne pas bloquer le retour du
+      // householdId. Si la sync échoue (réseau, RLS...), l'utilisateur
+      // voit quand même l'app au lieu d'être renvoyé vers la création de foyer.
+      unawaited(
+        InitialSyncService(_db).syncFromSupabase(householdId).catchError((e) {
+          debugPrint('[HouseholdService] Background sync failed: $e');
+        }),
+      );
+
       return householdId;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[HouseholdService] getCurrentHouseholdId error: $e');
       return null;
     }
   }
