@@ -85,12 +85,14 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
   }
 
   void _reset() {
+    final oldController = _messageController;
     setState(() {
       _sent = false;
       _selectedType = ContactType.bug;
       _messageController = TextEditingController();
       _errorMessage = null;
     });
+    oldController.dispose();
   }
 
   @override
