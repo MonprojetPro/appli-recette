@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:appli_recette/core/database/app_database.dart';
@@ -199,22 +198,15 @@ class HouseholdService {
         if (row == null) return null;
         householdId = row['household_id'] as String;
         await _persistHouseholdId(householdId);
-
-        // Sync en arrière-plan (données recettes/membres)
-        unawaited(
-          InitialSyncService(_db).syncFromSupabase(householdId).catchError((e) {
-            debugPrint('[HouseholdService] Background sync failed: $e');
-          }),
-        );
       } catch (e) {
         debugPrint('[HouseholdService] getCurrentHouseholdId error: $e');
         return null;
       }
     }
 
-    // ── Toujours synchroniser onboarding_completed depuis Supabase ──────
-    // Source de vérité : la base de données, pas le cache navigateur.
-    // Coût : 1 requête légère à chaque démarrage — garanti fiable.
+    // ── Toujours synchroniser depuis Supabase avant de retourner ────────
+    // Garantit que quand le home screen s'affiche, les données du foyer
+    // (recettes, membres, ingrédients, onboarding) sont déjà dans drift.
     try {
       final householdRow = await _client
           .from('households')
@@ -229,6 +221,13 @@ class HouseholdService {
       }
     } catch (_) {
       // En cas d'erreur réseau, on conserve l'état local existant
+    }
+
+    // Charger toutes les données du foyer dans drift AVANT d'afficher le home
+    try {
+      await InitialSyncService(_db).syncFromSupabase(householdId);
+    } catch (e) {
+      debugPrint('[HouseholdService] sync error: $e');
     }
 
     return householdId;
