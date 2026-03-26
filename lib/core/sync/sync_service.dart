@@ -7,12 +7,9 @@ import 'package:appli_recette/core/sync/initial_sync_service.dart';
 import 'package:appli_recette/core/sync/sync_queue_processor.dart';
 import 'package:appli_recette/core/sync/sync_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Orchestre [ConnectivityMonitor] et [SyncQueueProcessor].
-/// Déclenche la synchronisation automatiquement quand le réseau revient.
-/// Utilise Supabase Realtime pour sync instantanée entre membres du foyer.
-/// Timer de fallback toutes les 5 minutes au cas où le Realtime décroche.
+/// Pull immédiat au démarrage + refresh périodique toutes les 30 secondes.
 class SyncService {
   SyncService(this._monitor, this._processor, this._db);
 
@@ -23,104 +20,41 @@ class SyncService {
   final _statusController = StreamController<SyncStatus>.broadcast();
   StreamSubscription<bool>? _connectivitySub;
   Timer? _pullTimer;
-  RealtimeChannel? _realtimeChannel;
   bool _isPulling = false;
 
-  /// Fallback : pull périodique si le Realtime décroche (5 min).
-  static const _fallbackInterval = Duration(minutes: 5);
+  /// Refresh périodique (30 secondes).
+  static const _pullInterval = Duration(seconds: 30);
 
   Stream<SyncStatus> get statusStream => _statusController.stream;
 
-  /// Démarre la surveillance de connectivité, le Realtime et le pull de fallback.
+  /// Démarre la sync : pull immédiat + timer périodique.
   void start() {
     _connectivitySub?.cancel();
     _connectivitySub = _monitor.isOnline.listen(
       _onConnectivityChanged,
       onError: (Object e) => log('SyncService connectivity error: $e'),
     );
-    // Vérification immédiate au démarrage
+    // Au démarrage : push la queue locale PUIS pull les données du foyer
     _monitor.checkCurrentStatus().then(
       (isOnline) {
-        if (isOnline) _processQueue();
+        if (isOnline) {
+          _processQueue().then((_) => _pullFromCloud());
+        }
       },
       onError: (Object e) => log('SyncService checkCurrentStatus error: $e'),
     );
-    // Realtime : sync instantanée entre membres du foyer
-    _subscribeRealtime();
-    // Timer de fallback (au cas où le Realtime décroche)
+    // Refresh périodique
     _pullTimer?.cancel();
-    _pullTimer = Timer.periodic(_fallbackInterval, (_) => _pullFromCloud());
+    _pullTimer = Timer.periodic(_pullInterval, (_) => _pullFromCloud());
   }
 
   /// Déclenche immédiatement un pull depuis Supabase.
   Future<void> pullNow() => _pullFromCloud();
 
-  // ── Supabase Realtime ──────────────────────────────────────────────────
-
-  /// S'abonne aux changements en temps réel sur les tables du foyer.
-  /// Quand un autre membre modifie une recette, un membre, un ingrédient
-  /// → on reçoit l'événement et on tire les données immédiatement.
-  Future<void> _subscribeRealtime() async {
-    final prefs = await SharedPreferences.getInstance();
-    final householdId = prefs.getString('household_id');
-    if (householdId == null) return;
-
-    // Fermer l'ancien channel si on se réabonne
-    _realtimeChannel?.unsubscribe();
-
-    final client = Supabase.instance.client;
-
-    _realtimeChannel = client.channel('household_sync_$householdId')
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'recipes',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'household_id',
-          value: householdId,
-        ),
-        callback: (_) => _onRealtimeChange('recipes'),
-      )
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'members',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'household_id',
-          value: householdId,
-        ),
-        callback: (_) => _onRealtimeChange('members'),
-      )
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'ingredients',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'household_id',
-          value: householdId,
-        ),
-        callback: (_) => _onRealtimeChange('ingredients'),
-      )
-      ..subscribe();
-  }
-
-  /// Appelé quand Supabase Realtime notifie un changement.
-  void _onRealtimeChange(String table) {
-    log('SyncService: Realtime change on $table — pulling now');
-    _pullFromCloud();
-  }
-
-  // ── Connectivité ────────────────────────────────────────────────────────
-
   Future<void> _onConnectivityChanged(bool isOnline) async {
     if (isOnline) {
       await _processQueue();
       await _pullFromCloud();
-      // Re-souscrire au Realtime au retour de connectivité
-      _subscribeRealtime();
     } else {
       _statusController.add(SyncStatus.offline);
     }
@@ -137,10 +71,10 @@ class SyncService {
     }
   }
 
-  /// Télécharge les dernières données du foyer depuis Supabase.
-  /// Protégé contre les appels multiples simultanés (debounce naturel).
+  /// Télécharge les données du foyer depuis Supabase.
+  /// Protégé contre les appels simultanés.
   Future<void> _pullFromCloud() async {
-    if (_isPulling) return; // éviter les pulls simultanés
+    if (_isPulling) return;
     _isPulling = true;
     try {
       final isOnline = await _monitor.checkCurrentStatus();
@@ -161,7 +95,6 @@ class SyncService {
   void dispose() {
     _connectivitySub?.cancel();
     _pullTimer?.cancel();
-    _realtimeChannel?.unsubscribe();
     _statusController.close();
   }
 }
