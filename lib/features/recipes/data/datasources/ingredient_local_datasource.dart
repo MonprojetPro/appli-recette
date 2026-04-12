@@ -16,6 +16,13 @@ class IngredientLocalDatasource {
         .watch();
   }
 
+  /// Liste synchrone des ingrédients d'une recette (pour enqueue delete).
+  Future<List<Ingredient>> listForRecipe(String recipeId) {
+    return (_db.select(_db.ingredients)
+          ..where((t) => t.recipeId.equals(recipeId)))
+        .get();
+  }
+
   /// Insère un ingrédient et retourne son ID.
   Future<String> insert(IngredientsCompanion companion) async {
     await _db.into(_db.ingredients).insert(companion);

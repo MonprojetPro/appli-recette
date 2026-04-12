@@ -27,7 +27,7 @@ void main() {
     db = _createTestDatabase();
     final syncQueue = SyncQueueDatasource(db);
     recipeRepo = RecipeRepositoryImpl(RecipeLocalDatasource(db), syncQueue);
-    ingRepo = IngredientRepositoryImpl(IngredientLocalDatasource(db));
+    ingRepo = IngredientRepositoryImpl(IngredientLocalDatasource(db), syncQueue);
 
     // Crée une recette de base pour lier les ingrédients
     recipeId = await recipeRepo.create(

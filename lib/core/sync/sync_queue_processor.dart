@@ -30,8 +30,11 @@ class SyncQueueProcessor {
       'id', 'name', 'age', 'household_id', 'created_at', 'updated_at',
     },
     'ingredients': {
-      'id', 'recipe_id', 'name', 'quantity', 'unit', 'household_id',
-      'created_at', 'updated_at',
+      'id', 'recipe_id', 'name', 'quantity', 'unit', 'supermarket_section',
+      'household_id',
+    },
+    'recipe_steps': {
+      'id', 'recipe_id', 'step_number', 'instruction', 'photo_paths_json',
     },
     'meal_ratings': {
       'id', 'member_id', 'recipe_id', 'rating', 'household_id',
@@ -78,13 +81,18 @@ class SyncQueueProcessor {
     try {
       final payload = jsonDecode(entry.payload) as Map<String, dynamic>;
 
-      // Inclure household_id dans tous les payloads si disponible (Story 7.3)
-      if (householdId != null && !payload.containsKey('household_id')) {
+      // Inclure household_id dans tous les payloads si disponible (Story 7.3),
+      // SAUF pour les tables qui n'ont pas cette colonne (recipe_steps).
+      final allowedFields = _tableFields[entry.entityTable];
+      final tableHasHouseholdId =
+          allowedFields == null || allowedFields.contains('household_id');
+      if (tableHasHouseholdId &&
+          householdId != null &&
+          !payload.containsKey('household_id')) {
         payload['household_id'] = householdId;
       }
 
       // Validation : ne garder que les clés attendues par la table cible
-      final allowedFields = _tableFields[entry.entityTable];
       if (allowedFields != null) {
         payload.removeWhere((key, _) => !allowedFields.contains(key));
       }
