@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:developer';
 
 import 'package:appli_recette/core/database/app_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:appli_recette/core/sync/connectivity_monitor.dart';
 import 'package:appli_recette/core/sync/initial_sync_service.dart';
 import 'package:appli_recette/core/sync/sync_queue_processor.dart';
@@ -32,7 +32,7 @@ class SyncService {
     _connectivitySub?.cancel();
     _connectivitySub = _monitor.isOnline.listen(
       _onConnectivityChanged,
-      onError: (Object e) => log('SyncService connectivity error: $e'),
+      onError: (Object e) => debugPrint('SyncService connectivity error: $e'),
     );
     // Au démarrage : push la queue locale PUIS pull les données du foyer
     _monitor.checkCurrentStatus().then(
@@ -41,7 +41,7 @@ class SyncService {
           _processQueue().then((_) => _pullFromCloud());
         }
       },
-      onError: (Object e) => log('SyncService checkCurrentStatus error: $e'),
+      onError: (Object e) => debugPrint('SyncService checkCurrentStatus error: $e'),
     );
     // Refresh périodique
     _pullTimer?.cancel();
@@ -66,7 +66,7 @@ class SyncService {
       await _processor.processQueue();
       _statusController.add(SyncStatus.synced);
     } catch (e) {
-      log('SyncService processQueue error: $e');
+      debugPrint('SyncService processQueue error: $e');
       _statusController.add(SyncStatus.error);
     }
   }
@@ -85,12 +85,12 @@ class SyncService {
       if (householdId == null) return;
 
       final before = await _countLocalRecipes(householdId);
-      log('[SyncService] pull start household=$householdId localRecipes=$before');
+      debugPrint('[SyncService] pull start household=$householdId localRecipes=$before');
       await InitialSyncService(_db).syncFromSupabase(householdId);
       final after = await _countLocalRecipes(householdId);
-      log('[SyncService] pull done household=$householdId localRecipes=$after delta=${after - before}');
+      debugPrint('[SyncService] pull done household=$householdId localRecipes=$after delta=${after - before}');
     } catch (e, st) {
-      log('[SyncService] pullFromCloud error: $e\n$st');
+      debugPrint('[SyncService] pullFromCloud error: $e\n$st');
     } finally {
       _isPulling = false;
     }

@@ -1,6 +1,5 @@
-import 'dart:developer';
-
 import 'package:appli_recette/core/database/app_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -81,10 +80,10 @@ class InitialSyncService {
         ));
       } catch (e) {
         skipped++;
-        log('[InitialSync] members skipped row=${(row as Map?)?['id']} err=$e');
+        debugPrint('[InitialSync] members skipped row=${(row as Map?)?['id']} err=$e');
       }
     }
-    log('[InitialSync] members fetched=${list.length} parsed=${companions.length} skipped=$skipped');
+    debugPrint('[InitialSync] members fetched=${list.length} parsed=${companions.length} skipped=$skipped');
     await _insertWithFallback(
       table: _db.members,
       companions: companions,
@@ -131,10 +130,10 @@ class InitialSyncService {
         ));
       } catch (e) {
         skipped++;
-        log('[InitialSync] recipes skipped row=${(row as Map?)?['id']} err=$e');
+        debugPrint('[InitialSync] recipes skipped row=${(row as Map?)?['id']} err=$e');
       }
     }
-    log('[InitialSync] recipes fetched=${list.length} parsed=${companions.length} skipped=$skipped');
+    debugPrint('[InitialSync] recipes fetched=${list.length} parsed=${companions.length} skipped=$skipped');
     await _insertWithFallback(
       table: _db.recipes,
       companions: companions,
@@ -167,10 +166,10 @@ class InitialSyncService {
         ));
       } catch (e) {
         skipped++;
-        log('[InitialSync] ingredients skipped row=${(row as Map?)?['id']} err=$e');
+        debugPrint('[InitialSync] ingredients skipped row=${(row as Map?)?['id']} err=$e');
       }
     }
-    log('[InitialSync] ingredients fetched=${list.length} parsed=${companions.length} skipped=$skipped');
+    debugPrint('[InitialSync] ingredients fetched=${list.length} parsed=${companions.length} skipped=$skipped');
     await _insertWithFallback(
       table: _db.ingredients,
       companions: companions,
@@ -201,10 +200,10 @@ class InitialSyncService {
         ));
       } catch (e) {
         skipped++;
-        log('[InitialSync] recipe_steps skipped row=${(row as Map?)?['id']} err=$e');
+        debugPrint('[InitialSync] recipe_steps skipped row=${(row as Map?)?['id']} err=$e');
       }
     }
-    log('[InitialSync] recipe_steps fetched=${list.length} parsed=${companions.length} skipped=$skipped');
+    debugPrint('[InitialSync] recipe_steps fetched=${list.length} parsed=${companions.length} skipped=$skipped');
     await _insertWithFallback(
       table: _db.recipeSteps,
       companions: companions,
@@ -236,10 +235,10 @@ class InitialSyncService {
       await _db.batch((batch) {
         batch.insertAllOnConflictUpdate(table, companions);
       });
-      log('[InitialSync] $label batch insert OK count=${companions.length}');
+      debugPrint('[InitialSync] $label batch insert OK count=${companions.length}');
       return;
     } catch (e) {
-      log('[InitialSync] $label batch failed err=$e — fallback per-row');
+      debugPrint('[InitialSync] $label batch failed err=$e — fallback per-row');
     }
     var ok = 0;
     var ko = 0;
@@ -251,10 +250,10 @@ class InitialSyncService {
         ok++;
       } catch (e) {
         ko++;
-        log('[InitialSync] $label per-row insert failed err=$e');
+        debugPrint('[InitialSync] $label per-row insert failed err=$e');
       }
     }
-    log('[InitialSync] $label per-row done ok=$ok ko=$ko');
+    debugPrint('[InitialSync] $label per-row done ok=$ok ko=$ko');
   }
 
   // ── Présences par défaut ─────────────────────────────────────────────────
